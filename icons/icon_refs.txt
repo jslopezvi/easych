@@ -16,5 +16,5 @@ http://www.flaticon.com/free-icon/play-button_26025#term=play&page=1&position=5
 Load:
 http://www.flaticon.com/free-icon/book_118069#term=read&page=1&position=8
 
-
-
+Alarm:
+http://www.flaticon.com/free-icon/alarm_109976#term=alarm&page=1&position=3

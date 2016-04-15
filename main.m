@@ -22,7 +22,7 @@ function varargout = main(varargin)
 
 % Edit the above text to modify the response to help main
 
-% Last Modified by GUIDE v2.5 15-Apr-2016 11:45:21
+% Last Modified by GUIDE v2.5 15-Apr-2016 16:26:58
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -54,9 +54,6 @@ function main_OpeningFcn(hObject, eventdata, handles, varargin)
 
 % Choose default command line output for main
 handles.output = hObject;
-
-% Update handles structure
-guidata(hObject, handles);
 
 % Read logo image
 [logo_img,logo_map] = imread('icons/easych.png');
@@ -102,6 +99,39 @@ set(handles.heart_pushbutton,'CData',heart_icon);
 [lungs_img,lungs_map] = imread('icons/lungs_64.png');
 lungs_icon = ind2rgb(lungs_img,lungs_map);
 set(handles.respiratory_pushbutton,'CData',lungs_icon);
+
+% Init Alarm icon
+[alarm_img,alarm_map] = imread('icons/alarm.png');
+alarm_icon = ind2rgb(alarm_img,alarm_map);
+set(handles.alarm_pushbutton,'CData',alarm_icon);
+
+% Init HRV Tables
+% Time measures
+handles.time_table.Data = {'SDNN',sprintf('%0.2f',0);'SDANN',sprintf('%0.2f',0);'RMSSD',sprintf('%0.2f',0);'SDSD',sprintf('%0.2f',0);'pNN50',sprintf('%0.2f%%',0);};
+
+% Frequency measures
+handles.freq_table.Data = {'HF',sprintf('%0.2f',0);'LF',sprintf('%0.2f',0);'VLF',sprintf('%0.2f',0);'ULF',sprintf('%0.2f',0);'LF/HF',sprintf('%0.2f',0);};
+
+% Save play button status
+handles.play_pressed = 0;
+
+% Set online monitoring flag
+handles.monitoring = 0;
+
+% Selected row indices for recording and alarms tables.
+handles.current_row_alarms_table = 0;
+handles.current_row_recordings_table = 0;
+
+% Init monitoring_timer
+handles.monitoring_timer = 0;
+
+% Init panels states
+set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+
+% Update handles structure
+guidata(hObject, handles);
 
 % UIWAIT makes main wait for user response (see UIRESUME)
 % uiwait(handles.easych_figure);
@@ -155,6 +185,28 @@ function plot_type_axes_Callback(hObject, eventdata, handles)
 % Hints: contents = cellstr(get(hObject,'String')) returns plot_type_axes contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from plot_type_axes
 
+switch get(handles.plot_type_axes,'Value')
+    case 1 % HRV
+        fprintf('Selected HRV plot type\n');
+        set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+    case 2 % Online
+        fprintf('Selected Online plot type\n');
+        set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+    case 3 % Alarm Viewer
+        fprintf('Selected AlarmViewer plot type\n');
+        set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+    otherwise % File Record
+        fprintf('Selected FileRecord plot type\n');
+        set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+end
 
 % --- Executes during object creation, after setting all properties.
 function plot_type_axes_CreateFcn(hObject, eventdata, handles)
@@ -237,6 +289,97 @@ function respiratory_pushbutton_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+function start_monitoring(hObject)
+    handles = guidata(hObject);
+    h = handles.current_monitoring_axes;
+    h.Visible = 'off';
+    set(handles.easych_figure, 'CurrentAxes', h);
+    grid(h, 'on');
+    grid(h, 'minor');
+    hold(h, 'on');
+
+    h.Visible = 'on';
+
+    index_step = 0.1;
+    w = 0.3;
+    first_index = 1;
+    final_index = 100;
+
+    start_index = first_index;
+    end_index = w;
+
+    load('db/MITDB.mat')
+    ecg = MITDB.rec103.ecg;
+    fs = MITDB.rec103.hea.freq;
+    index_step = 1/fs;
+    final_index = numel(ecg);
+
+    % x = first_index:index_step:final_index;
+    x = 1/fs:1/fs:final_index/fs;
+
+    % Desired resample percentage
+    d_fs_p = 0.5;
+    d_fs = round(d_fs_p*fs);
+    index_step = 1/d_fs;
+
+    % resample_x = zeros(1, round(numel(x)*d_fs_p));
+    resample_x = 1/fs:1/d_fs:numel(x)/fs;
+
+    start_index = 1;
+    y = ecg;
+
+    resample_y = zeros(1, numel(resample_x));
+    resampled_y = 0;
+
+    last_resampled_index = 0;
+
+    % resample
+    for i=1:numel(y),
+        if( i - last_resampled_index >= 1/d_fs_p ),
+            resampled_y = resampled_y + 1;
+            last_resampled_index = i;
+            resample_y(resampled_y) = y(i);
+        end
+    end
+
+    % miny = min(y);
+    % maxy = max(y);
+
+    miny = 800;
+    maxy = 1400;
+
+    for i = 1:numel(resample_x);
+        handles = guidata(hObject);
+        h = handles.current_monitoring_axes;
+                
+%         grid(h, 'minor');
+        
+        cla(h);
+            
+        if(resample_x(i) > w)
+            start_index = round(i-(w/index_step));
+
+            if(start_index <= 0),
+                start_index = first_index;
+            end
+        end
+
+        end_index = i;
+
+        plot(h, resample_x(start_index:end_index), resample_y(start_index:end_index));        
+        plot(h, resample_x(i), resample_y(i), 'or');
+    %    grid on;
+
+       xlim(h, [resample_x(i)-w,resample_x(i)+w]);
+       ylim(h, [miny,maxy]);
+       
+       drawnow;
+    end
+
+function timer_callback(timerHandle,timerData)
+timerHandle.UserData = timerHandle.UserData + 1;
+% fprintf('Running timer callback at %s...\n',datestr(timerData.Data.time,'dd-mmm-yyyy HH:MM:SS.FFF'));
+fprintf('Elapsed time %d\n',timerHandle.UserData);
 
 % --- Executes on button press in play_pushbutton.
 function play_pushbutton_Callback(hObject, eventdata, handles)
@@ -244,6 +387,54 @@ function play_pushbutton_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+if(handles.play_pressed == 0),
+    % Read sampling frequency
+    fs = str2double(get(handles.fs_txt,'String'));
+    
+    if(isnan(fs)),
+        msgbox('Plese give a numeric value (decimal values separated by dot (.)) for sampling frequency Fs!','Error with sampling frequency','error');
+        return;
+    end
+    
+    % Set monitoring flag
+    handles.monitoring = 1;
+    handles.play_pressed = 1;
+    
+    % Read pause icon
+    [pause_img,pause_map] = imread('icons/pause.png');
+    pause_icon = ind2rgb(pause_img,pause_map);
+    set(handles.play_pushbutton,'CData',pause_icon);
+    
+    handles.current_monitoring_axes = handles.monitoring_axes;
+    guidata(hObject, handles);
+    
+    handles.monitoring_timer = timer;
+    handles.monitoring_timer.StartDelay = 0;        
+    
+    handles.monitoring_timer.Period = 1/fs;
+    handles.monitoring_timer.ExecutionMode = 'fixedRate';
+    handles.monitoring_timer.TimerFcn = @timer_callback;
+    handles.monitoring_timer.UserData = 0;
+    start(handles.monitoring_timer);
+    
+    guidata(hObject, handles);
+    
+%     start_monitoring(hObject);
+elseif(handles.play_pressed == 1),
+    handles.monitoring = 0;
+    handles.play_pressed = 0;
+    [play_img,play_map] = imread('icons/play.png');
+    play_icon = ind2rgb(play_img,play_map);
+    set(handles.play_pushbutton,'CData',play_icon);
+    
+    handles.current_monitoring_axes = handles.hidden_axes;
+    
+    stop(handles.monitoring_timer);
+    disp('Timer stopped!');
+    guidata(hObject, handles);
+else
+    msgbox('Unkown monitoring status!','Warning','war');
+end
 
 
 function first_name_txt_Callback(hObject, eventdata, handles)
@@ -503,6 +694,14 @@ function show_alarm_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to show_alarm_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = guidata(hObject);
+
+if(handles.current_row_alarms_table ~= 0),
+    msgbox(sprintf('Showing alarm # %d', handles.current_row_alarms_table), 'Info', 'help');
+else
+    msgbox(sprintf('No alarm to show!'), 'Info', 'help');
+end
+
 
 
 
@@ -540,6 +739,13 @@ function show_recording_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to show_recording_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = guidata(hObject);
+
+if(handles.current_row_recordings_table ~= 0),
+    msgbox(sprintf('Showing recording # %d', handles.current_row_recordings_table), 'Info', 'help');
+else
+    msgbox(sprintf('No recording to show!'), 'Info', 'help');
+end
 
 
 % --- Executes on button press in record_pushbutton.
@@ -577,3 +783,52 @@ function fs_txt_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+% --- Executes on button press in alarm_pushbutton.
+function alarm_pushbutton_Callback(hObject, eventdata, handles)
+% hObject    handle to alarm_pushbutton (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes when selected cell(s) is changed in recordings_table.
+function recordings_table_CellSelectionCallback(hObject, eventdata, handles)
+% hObject    handle to recordings_table (see GCBO)
+% eventdata  structure with the following fields (see MATLAB.UI.CONTROL.TABLE)
+%	Indices: row and column indices of the cell(s) currently selecteds
+% handles    structure with handles and user data (see GUIDATA)
+
+fprintf('Current row selected on recordings table:');
+disp(eventdata.Indices(1));
+handles.current_row_recordings_table = eventdata.Indices(1);
+guidata(hObject, handles);
+
+
+% --- Executes when selected cell(s) is changed in alarms_table.
+function alarms_table_CellSelectionCallback(hObject, eventdata, handles)
+% hObject    handle to alarms_table (see GCBO)
+% eventdata  structure with the following fields (see MATLAB.UI.CONTROL.TABLE)
+%	Indices: row and column indices of the cell(s) currently selecteds
+% handles    structure with handles and user data (see GUIDATA)
+
+fprintf('Current row selected on alarms table:');
+disp(eventdata.Indices(1));
+handles.current_row_alarms_table = eventdata.Indices(1);
+guidata(hObject, handles);
+
+
+% --- Executes when user attempts to close easych_figure.
+function easych_figure_CloseRequestFcn(hObject, eventdata, handles)
+% hObject    handle to easych_figure (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+handles = guidata(hObject);
+
+if(handles.monitoring_timer ~= 0),
+    stop(handles.monitoring_timer);
+end
+
+% Hint: delete(hObject) closes the figure
+delete(hObject);
