@@ -10,7 +10,7 @@ function varargout = main(varargin)
 %      function named CALLBACK in MAIN.M with the given input arguments.
 %
 %      MAIN('Property','Value',...) creates a new MAIN or raises the
-%      existing singleton*.  Starting from the left, property value pairs are
+%      existing singlet           on*.  Starting from the left, property value pairs are
 %      applied to the GUI before main_OpeningFcn gets called.  An
 %      unrecognized property name or invalid value makes property application
 %      stop.  All inputs are passed to main_OpeningFcn via varargin.
@@ -125,10 +125,23 @@ handles.current_row_recordings_table = 0;
 % Init monitoring_timer
 handles.monitoring_timer = 0;
 
+% Init serial port
+handles.serial_port = 0;
+
+% Init elapsed time
+handles.elapsed_time = 0;
+
+% Init ecg record
+handles.current_record = struct;
+handles.current_record.data = [];
+
 % Init panels states
 set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
+
+movegui(hObject,'center');
 
 % Update handles structure
 guidata(hObject, handles);
@@ -191,21 +204,25 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
     case 2 % Online
         fprintf('Selected Online plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'off');
     case 3 % Alarm Viewer
         fprintf('Selected AlarmViewer plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
     otherwise % File Record
         fprintf('Selected FileRecord plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
 end
 
 % --- Executes during object creation, after setting all properties.
@@ -289,6 +306,33 @@ function respiratory_pushbutton_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+function [bytes,byte_counter] = read_serialport(hObject)
+handles = guidata(hObject);
+if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 1),
+    if(handles.serial_port.BytesAvailable > 0),
+        bytes_read = fread(handles.serial_port,handles.serial_port.BytesAvailable,'uint8');    
+        n = numel(bytes_read);
+
+        byte_counter = 0;    
+        bytes = zeros(1,n/4);
+
+        for i=1:n/4, % Discard all data that is not exact multiple of 4
+            byte_counter = byte_counter + 1;
+            base_index = 4*(byte_counter-1) + 1;
+
+            v1 = bitshift(bytes_read(base_index+0),8*3); % Most significant byte
+            v2 = bitshift(bytes_read(base_index+1),8*2);
+            v3 = bitshift(bytes_read(base_index+2),8*1);
+            v4 = bitshift(bytes_read(base_index+3),8*0); % Less significant byte
+
+            bytes(byte_counter) = v1 + v2 + v3 + v4;
+        end
+    else
+        bytes = [];
+        byte_counter = 0;
+    end
+end
+
 function start_monitoring(hObject)
     handles = guidata(hObject);
     h = handles.current_monitoring_axes;
@@ -297,89 +341,54 @@ function start_monitoring(hObject)
     grid(h, 'on');
     grid(h, 'minor');
     hold(h, 'on');
-
-    h.Visible = 'on';
-
-    index_step = 0.1;
-    w = 0.3;
-    first_index = 1;
-    final_index = 100;
-
-    start_index = first_index;
-    end_index = w;
-
-    load('db/MITDB.mat')
-    ecg = MITDB.rec103.ecg;
-    fs = MITDB.rec103.hea.freq;
-    index_step = 1/fs;
-    final_index = numel(ecg);
-
-    % x = first_index:index_step:final_index;
-    x = 1/fs:1/fs:final_index/fs;
-
-    % Desired resample percentage
-    d_fs_p = 0.5;
-    d_fs = round(d_fs_p*fs);
-    index_step = 1/d_fs;
-
-    % resample_x = zeros(1, round(numel(x)*d_fs_p));
-    resample_x = 1/fs:1/d_fs:numel(x)/fs;
-
-    start_index = 1;
-    y = ecg;
-
-    resample_y = zeros(1, numel(resample_x));
-    resampled_y = 0;
-
-    last_resampled_index = 0;
-
-    % resample
-    for i=1:numel(y),
-        if( i - last_resampled_index >= 1/d_fs_p ),
-            resampled_y = resampled_y + 1;
-            last_resampled_index = i;
-            resample_y(resampled_y) = y(i);
-        end
-    end
-
-    % miny = min(y);
-    % maxy = max(y);
-
-    miny = 800;
-    maxy = 1400;
-
-    for i = 1:numel(resample_x);
-        handles = guidata(hObject);
-        h = handles.current_monitoring_axes;
-                
-%         grid(h, 'minor');
-        
-        cla(h);
-            
-        if(resample_x(i) > w)
-            start_index = round(i-(w/index_step));
-
-            if(start_index <= 0),
-                start_index = first_index;
-            end
-        end
-
-        end_index = i;
-
-        plot(h, resample_x(start_index:end_index), resample_y(start_index:end_index));        
-        plot(h, resample_x(i), resample_y(i), 'or');
-    %    grid on;
-
-       xlim(h, [resample_x(i)-w,resample_x(i)+w]);
-       ylim(h, [miny,maxy]);
-       
-       drawnow;
-    end
+    h.Visible = 'on';  
 
 function timer_callback(timerHandle,timerData)
-timerHandle.UserData = timerHandle.UserData + 1;
-% fprintf('Running timer callback at %s...\n',datestr(timerData.Data.time,'dd-mmm-yyyy HH:MM:SS.FFF'));
-fprintf('Elapsed time %d\n',timerHandle.UserData);
+% Read handles
+handles = guidata(timerHandle.UserData);
+if(handles.monitoring == 1),        
+    handles.elapsed_time = handles.elapsed_time + 1;
+    
+    fprintf('Running timer... Elapsed time %d\n',handles.elapsed_time);
+    fprintf('Running timer callback at %s...\n',datestr(timerData.Data.time,'dd-mmm-yyyy HH:MM:SS.FFF'));
+    
+    % Read serial port
+    [bytes,byte_counter] = read_serialport(timerHandle.UserData);
+    
+    if(byte_counter > 0),
+        h = handles.current_monitoring_axes;
+        
+        % Compute start and end indexes.
+        start_index = numel(handles.current_record.data);
+        handles.current_record.data = [handles.current_record.data bytes];
+        
+        guidata(hObject, handles);
+
+        w = 10;
+        miny = min(handles.current_record.data);
+        maxy = max(handles.current_record.data);
+
+        for i = 1:byte_counter;
+            cla(h);
+
+            if(i > w)
+                start_i = i-w;
+            end
+            
+            end_i = i;
+
+            plot(h, start_index+start_i:start_index+end_i, handles.current_record.data(start_index+start_i:start_index+end_i));
+            plot(h, i, handles.current_record.data(start_index+i), 'or');
+
+           xlim(h, [start_index+i-w,start_index+i+w]);
+           ylim(h, [miny,maxy]);
+
+           drawnow;
+        end 
+    end    
+end
+% Update handles
+guidata(timerHandle.UserData, handles);
 
 % --- Executes on button press in play_pushbutton.
 function play_pushbutton_Callback(hObject, eventdata, handles)
@@ -388,6 +397,31 @@ function play_pushbutton_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 if(handles.play_pressed == 0),
+    % Read serial port
+    serial_port_coms = get(handles.comport_pop,'String');
+    serial_port_com_val = get(handles.comport_pop,'Value');
+    serial_port_baudrates = get(handles.baudrate_pop,'String');
+    serial_port_baudrate_val = get(handles.baudrate_pop,'Value');
+    
+    serial_port_com = serial_port_coms(serial_port_com_val);
+    serial_port_baudrate = serial_port_baudrates(serial_port_baudrate_val);
+    
+    handles.serial_port = serial(serial_port_com{:},'BaudRate',str2double(serial_port_baudrate),'DataBits',8);
+    handles.serial_port.InputBufferSize = 50000;
+    
+    try
+        if(strcmp(handles.serial_port.Status,'open') == 1),
+            fclose(handles.serial_port);
+        end
+        
+        fopen(handles.serial_port);
+    catch ME
+        msgbox(sprintf('Cannot connect to serial port %s, %s',serial_port_com{:},ME.message),'Serial port error','error');
+        return;
+    end
+
+    msgbox(sprintf('Successfully connected to %s!',serial_port_com{:}),'Successful connection to serial port','help');
+    
     % Read sampling frequency
     fs = str2double(get(handles.fs_txt,'String'));
     
@@ -404,32 +438,50 @@ if(handles.play_pressed == 0),
     [pause_img,pause_map] = imread('icons/pause.png');
     pause_icon = ind2rgb(pause_img,pause_map);
     set(handles.play_pushbutton,'CData',pause_icon);
+    drawnow;
     
     handles.current_monitoring_axes = handles.monitoring_axes;
     guidata(hObject, handles);
     
     handles.monitoring_timer = timer;
-    handles.monitoring_timer.StartDelay = 0;        
+    handles.monitoring_timer.StartDelay = 0;
     
-    handles.monitoring_timer.Period = 1/fs;
+    % Reduce the speed in a factor of 10
+    handles.monitoring_timer.Period = 10/fs;
+    
     handles.monitoring_timer.ExecutionMode = 'fixedRate';
     handles.monitoring_timer.TimerFcn = @timer_callback;
-    handles.monitoring_timer.UserData = 0;
-    start(handles.monitoring_timer);
     
     guidata(hObject, handles);
     
-%     start_monitoring(hObject);
+    handles.monitoring_timer.UserData = hObject;
+    
+    start_monitoring(hObject);
+    
+    start(handles.monitoring_timer);
+    
+    guidata(hObject, handles);    
+    
 elseif(handles.play_pressed == 1),
     handles.monitoring = 0;
     handles.play_pressed = 0;
+    guidata(hObject, handles);
+    
     [play_img,play_map] = imread('icons/play.png');
     play_icon = ind2rgb(play_img,play_map);
     set(handles.play_pushbutton,'CData',play_icon);
+    drawnow;
     
     handles.current_monitoring_axes = handles.hidden_axes;
     
     stop(handles.monitoring_timer);
+    
+    if(strcmp(handles.serial_port.Status,'open') == 1),
+        fclose(handles.serial_port);
+        delete(handles.serial_port);
+        msgbox('Successfully disconnected!','Successful disconnection to serial port','help');
+    end
+    
     disp('Timer stopped!');
     guidata(hObject, handles);
 else
@@ -826,8 +878,17 @@ function easych_figure_CloseRequestFcn(hObject, eventdata, handles)
 
 handles = guidata(hObject);
 
+% Stop timer if present
 if(handles.monitoring_timer ~= 0),
     stop(handles.monitoring_timer);
+end
+
+% Close and delete serial port if present
+if(handles.serial_port ~= 0),
+    if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 1),
+        fclose(handles.serial_port);
+        delete(handles.serial_port);
+    end
 end
 
 % Hint: delete(hObject) closes the figure
