@@ -15,7 +15,7 @@ serial_port_baudrate = 115200;
 % applications. A 250 Hz or 360 Hz sampling frequency should be enough.
 
 % Read signal from database. With desired
-[signal, fs] = load_mitbih_arrhythmia_record('rec103',180);
+[signal, fs] = load_mitbih_arrhythmia_record('rec103',80);
 
 % Open connection with serial port COM2 with a baudrate of 115200
 s = serial(serial_port_com,'BaudRate',serial_port_baudrate,'DataBits',8);

@@ -333,16 +333,6 @@ if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 
     end
 end
 
-function start_monitoring(hObject)
-    handles = guidata(hObject);
-    h = handles.current_monitoring_axes;
-    h.Visible = 'off';
-    set(handles.easych_figure, 'CurrentAxes', h);
-    grid(h, 'on');
-    grid(h, 'minor');
-    hold(h, 'on');
-    h.Visible = 'on';  
-
 function timer_callback(timerHandle,timerData)
 % Read handles
 handles = guidata(timerHandle.UserData);
@@ -356,19 +346,24 @@ if(handles.monitoring == 1),
     [bytes,byte_counter] = read_serialport(timerHandle.UserData);
     
     if(byte_counter > 0),
-        h = handles.current_monitoring_axes;
-        
         % Compute start and end indexes.
         start_index = numel(handles.current_record.data);
-        handles.current_record.data = [handles.current_record.data bytes];
-        
-        guidata(hObject, handles);
+        handles.current_record.data = [handles.current_record.data bytes];        
+        guidata(timerHandle.UserData, handles);
 
-        w = 10;
+        w = 100;
+        
         miny = min(handles.current_record.data);
         maxy = max(handles.current_record.data);
+        
+        start_i = 1;
 
+        fprintf('byte_counter = %d\n',byte_counter);
+        
         for i = 1:byte_counter;
+            handles = guidata(timerHandle.UserData);                        
+            h = handles.current_monitoring_axes;
+            
             cla(h);
 
             if(i > w)
@@ -378,13 +373,17 @@ if(handles.monitoring == 1),
             end_i = i;
 
             plot(h, start_index+start_i:start_index+end_i, handles.current_record.data(start_index+start_i:start_index+end_i));
-            plot(h, i, handles.current_record.data(start_index+i), 'or');
+            plot(h, start_index+i, handles.current_record.data(start_index+i), 'or');
+            
+            xlim(h, [start_index+i-w,start_index+i+w]);
+            ylim(h, [miny,maxy]);
 
-           xlim(h, [start_index+i-w,start_index+i+w]);
-           ylim(h, [miny,maxy]);
-
-           drawnow;
+            drawnow;
         end 
+    end    
+else
+    if(timerHandle ~= 0),
+        stop(timerHandle);
     end    
 end
 % Update handles
@@ -448,7 +447,7 @@ if(handles.play_pressed == 0),
     
     % Reduce the speed in a factor of 10
     handles.monitoring_timer.Period = 10/fs;
-    
+    handles.monitoring_timer.BusyMode = 'drop';
     handles.monitoring_timer.ExecutionMode = 'fixedRate';
     handles.monitoring_timer.TimerFcn = @timer_callback;
     
@@ -456,15 +455,20 @@ if(handles.play_pressed == 0),
     
     handles.monitoring_timer.UserData = hObject;
     
-    start_monitoring(hObject);
+    grid(handles.current_monitoring_axes, 'off');
+    grid(handles.current_monitoring_axes, 'on');
+    grid(handles.current_monitoring_axes, 'minor');
+    hold(handles.current_monitoring_axes, 'on');
     
     start(handles.monitoring_timer);
-    
-    guidata(hObject, handles);    
-    
+
+    if(isvalid(hObject)),
+        guidata(hObject, handles);
+    end
 elseif(handles.play_pressed == 1),
     handles.monitoring = 0;
     handles.play_pressed = 0;
+    handles.monitoring_timer.UserData = hObject;
     guidata(hObject, handles);
     
     [play_img,play_map] = imread('icons/play.png');
@@ -473,10 +477,11 @@ elseif(handles.play_pressed == 1),
     drawnow;
     
     handles.current_monitoring_axes = handles.hidden_axes;
+    handles.monitoring_timer.UserData = hObject;
     
     stop(handles.monitoring_timer);
     
-    if(strcmp(handles.serial_port.Status,'open') == 1),
+    if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 1),
         fclose(handles.serial_port);
         delete(handles.serial_port);
         msgbox('Successfully disconnected!','Successful disconnection to serial port','help');
