@@ -55,6 +55,10 @@ function main_OpeningFcn(hObject, eventdata, handles, varargin)
 % Choose default command line output for main
 handles.output = hObject;
 
+% Init EasyCH project struct
+global easych_project;
+handles.easych_project = struct;
+
 % Read logo image
 [logo_img,logo_map] = imread('icons/easych.png');
 logo_icon = ind2rgb(logo_img,logo_map);
@@ -135,11 +139,35 @@ handles.elapsed_time = 0;
 handles.current_record = struct;
 handles.current_record.data = [];
 
+% Init recordings_table
+handles.recordings = {};
+handles.recordings_table.Data = {};
+
+% Init recordings_table
+handles.alarms = {};
+handles.alarms_table.Data = {};
+
 % Init panels states
+% Hide axes
+set(handles.monitoring_axes, 'Visible','off');
+set(handles.heart_rate_axes, 'Visible','off');
+set(handles.respiratory_rate_axes, 'Visible','off');
+
+% Disable panels
+set(findall(handles.monitoring_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.clinical_history_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
-set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
-set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'off');
+
+set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'off');
+
+set(findall(handles.compute_hrv_pushbutton, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.show_recording_pushbutton, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.show_alarm_pushbutton, '-property', 'enable'), 'enable', 'off');
 
 movegui(hObject,'center');
 
@@ -166,13 +194,51 @@ function new_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to new_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = guidata(hObject);
 
+handles.project_name = strcat('easych_',strrep(strrep(datestr(datetime('now')), ' ', '_'),':','_'),'.ech');
+set(handles.project_txt, 'String', handles.project_name);
+
+% Show axes
+set(handles.monitoring_axes, 'Visible','on');
+set(handles.heart_rate_axes, 'Visible','on');
+set(handles.respiratory_rate_axes, 'Visible','on');
+
+set(findall(handles.monitoring_panel, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.clinical_history_panel, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'off');
+
+set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'off');
+
+set(findall(handles.compute_hrv_pushbutton, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.show_recording_pushbutton, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.show_alarm_pushbutton, '-property', 'enable'), 'enable', 'off');
+
+drawnow;
+set(findall(handles.save_pushbutton, '-property', 'enable'), 'enable', 'on');
+guidata(hObject, handles);
 
 % --- Executes on button press in open_pushbutton.
 function open_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to open_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = guidata(hObject);
+[FileName,PathName] = uigetfile('projects/*.ech','Please select EasyCH project file...');
+handles.project_name = FileName;
+handles.project_path = PathName;
+set(handles.project_txt, 'String', handles.project_name);
+
+handles.easych_project = load(strcat(PathName, FilePath));
+easych_project = handles.easych_project;
+
+set(findall(handles.save_pushbutton, '-property', 'enable'), 'enable', 'on');
+guidata(hObject, handles);
 
 
 % --- Executes on button press in save_pushbutton.
@@ -180,6 +246,37 @@ function save_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to save_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles = guidata(hObject);
+[FileName,PathName] = uiputfile(strcat('projects/',handles.project_name),'Please set path for saving EasyCH project file...');
+
+handles.easych_project.test_value1 = 12341234;
+handles.easych_project.test_value2 = 5555;
+
+if(numel(FileName) > 0),
+    if( exist(strcat(PathName,FileName),'file') ),
+        choice = questdlg('Do you want to overwrite file?', ...
+        'File Overwrite', ...
+        'Yes','No','No');
+
+        if (strcmp(choice,'Yes') == 1),
+            handles.project_name = FileName;
+            handles.project_path = PathName;
+
+            easych_project = handles.easych_project;
+            save(strcat(PathName,FileName), 'easych_project');
+        else
+            return;
+        end    
+    else
+        handles.project_name = FileName;
+        handles.project_path = PathName;
+
+        easych_project = handles.easych_project;
+        save(strcat(PathName,FileName), 'easych_project');
+    end
+end
+
+guidata(hObject, handles);
 
 
 % --- Executes on button press in logo_pushbutton.
@@ -202,27 +299,39 @@ switch get(handles.plot_type_axes,'Value')
     case 1 % HRV
         fprintf('Selected HRV plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
-        set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');        
+        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'off');
     case 2 % Online
         fprintf('Selected Online plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
     case 3 % Alarm Viewer
         fprintf('Selected AlarmViewer plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'off');
     otherwise % File Record
         fprintf('Selected FileRecord plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
 end
 
 % --- Executes during object creation, after setting all properties.

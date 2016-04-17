@@ -18,3 +18,6 @@ http://www.flaticon.com/free-icon/book_118069#term=read&page=1&position=8
 
 Alarm:
 http://www.flaticon.com/free-icon/alarm_109976#term=alarm&page=1&position=3
+
+Stop:
+http://www.flaticon.com/free-icon/palm-of-hand_1427#term=stop&page=1&position=5
