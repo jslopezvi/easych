@@ -4,7 +4,6 @@ function [ ecg_analysis_data ] = analyze_ecg_buffer( buffer, fs , reference_inde
 %       1. Fiducial points: Pons, Poffs, Qon, Rpeaks, Soff, Tons, Toffs
 %       2. Estimated heart rate: HR
 %       3. Estimated respiratory rate: BR
-%       4. Estimated delays: Dstart, Dend
 
 % Preprocess ECG. Filtering.
 filtered_buffer = filter_ecg(buffer, filter_threshold);

@@ -3,11 +3,11 @@ addpath('sim');
 % [signal, fs] = load_synthetic_ecg_record(250);
 [signal, fs] = load_mitbih_arrhythmia_record('rec101',360);
 
-% Time window for analysis of 300ms.
-time_window_for_analysis = 0.8;
+% Time window for analysis
+time_window_for_analysis = ceil(1000/fs);
 
 % Training time in seconds
-training_time = 5;
+training_time = 3*time_window_for_analysis;
 
 % Time between samples.
 time_per_sample = 1/fs;
@@ -31,6 +31,7 @@ desv_stand = 6.3593e+03;   % Initial standard deviation
 filter_threshold = 300*desv_stand;
 
 ecg_analysis = {};
+samples_processed_counter = 0;
 
 % Analyze train_buffer
 ecg_analysis_data = analyze_ecg_buffer(train_buffer, fs, 1, filter_threshold);
@@ -38,29 +39,21 @@ ecg_analysis_data = analyze_ecg_buffer(train_buffer, fs, 1, filter_threshold);
 % Save data in ecg_analysis cell array
 ecg_analysis(end+1) = {ecg_analysis_data};
 
-% Init delays struct.
-ecg_analysis_data.delays = struct;
-
 % Save delays.
-ecg_analysis_data.delays.start = min(ecg_analysis_data.fiducial_points.Pons);
-ecg_analysis_data.delays.end = numel(ecg_analysis_data.filtered_buffer) - max(ecg_analysis_data.fiducial_points.Toffs);
+ecg_analysis_data.delay = numel(ecg_analysis_data.filtered_buffer) - max(ecg_analysis_data.fiducial_points.Toffs);
 
-start_index = numel(train_buffer) - ecg_analysis_data.delays.end;
+samples_processed_counter = samples_processed_counter + numel(train_buffer) - ecg_analysis_data.delay;
+start_index = samples_processed_counter + 1;
 
-analysis_buffer = signal(start_index:start_index+number_of_samples_per_time_window);
-ecg_analysis_data.filter_threshold = (0.99*ecg_analysis_data.filter_threshold)+(0.01*(std(buffer)));
-ecg_analysis_data = analyze_ecg_buffer(train_buffer, fs, 1, ecg_analysis_data.filter_threshold);
-
-for i=1:number_of_time_windows_for_training,
-    for j=1:number_of_samples_per_time_window,
-        train_sample_counter = train_sample_counter + 1;
-        train_buffer(train_sample_counter) = signal(start_index+train_sample_counter-1);
-    end
+while(start_index+number_of_samples_per_time_window < numel(signal)),
+    analysis_buffer = signal(start_index:start_index+number_of_samples_per_time_window);
+    ecg_analysis_data.filter_threshold = (0.99*ecg_analysis_data.filter_threshold)+(0.01*(std(analysis_buffer)));
+    ecg_analysis_data = analyze_ecg_buffer(analysis_buffer, fs, start_index, ecg_analysis_data.filter_threshold);
+    ecg_analysis_data.delay = numel(ecg_analysis_data.filtered_buffer) - max(ecg_analysis_data.fiducial_points.Toffs);
+    ecg_analysis(end+1) = {ecg_analysis_data}; %#ok<SAGROW>
+    samples_processed_counter = samples_processed_counter + numel(analysis_buffer) - ecg_analysis_data.delay;
+    start_index = samples_processed_counter + 1;
 end
 
-
-
-
-
-
-
+fprintf('ecg_analysis length = %d\n', numel(ecg_analysis));
+fprintf('final delay = %d\n', ecg_analysis_data.delay);

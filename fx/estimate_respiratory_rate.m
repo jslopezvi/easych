@@ -35,13 +35,17 @@ function [Brate] = estimate_respiratory_rate(fiducial_points,ECGlead,fs,algorith
     peakLoc = peakfinder(z); 
     % Intervalos de tiempo entre picos
     m = t(peakLoc);
-    if length(m) == 1
-        cal = m;
-    else
-        for k = 2:length(m)
-            cal(1,k-1) = m(1,k)-m(1,k-1);   
+    if length(m) >= 1,
+        if length(m) == 1
+            cal = m;
+        else
+            for k = 2:length(m)
+                cal(1,k-1) = m(1,k)-m(1,k-1);   
+            end
         end
+        % Cálculo de la frecuencia respiratoria
+        Brate = floor(60/((mean(cal)))-1);
+    else
+        Brate = 0;
     end
-    % Cálculo de la frecuencia respiratoria
-    Brate = floor(60/((mean(cal)))-1);
 end
