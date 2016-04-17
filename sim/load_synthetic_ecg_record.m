@@ -1,18 +1,15 @@
-function [record_resampled_y,real_desired_fs] = load_mitbih_arrhythmia_record( record_name, desired_fs )
-%LOAD_MITBIH_ARRHYTHMIA_RECORD Load a MIT-BIH Arrhythmia ECG record.
-%   Given a desired sampling frequency, resample the record name specified.
+function [record_resampled_y,real_desired_fs] = load_synthetic_ecg_record( desired_fs )
+%LOAD_SYNTHETIC_ECG_RECORD Loads a synthetic ECG signal.
+%   Load into record_resample_y with desired_fs sampling frequency a
+%   synthetic ECG signal.
 
-if ~(exist('MITBD','var')),
-    load db/MITDB.mat
+if ~(exist('ECGdata','var')),
+    senal = load('db/ECGdata.mat');
 end
 
-if ~(isfield(MITDB,record_name)),
-    fprintf('Error reading MIT-BIH database: uknown record %s!\n', record_name);
-    return;
-end
+ecg = senal.ECGdata(:,1);
+fs = 250;
 
-ecg = MITDB.(record_name).ecg;
-fs = MITDB.(record_name).hea.freq;
 final_index = numel(ecg);
 
 x = 1/fs:1/fs:final_index/fs;

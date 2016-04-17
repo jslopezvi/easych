@@ -59,6 +59,9 @@ handles.output = hObject;
 global easych_project;
 handles.easych_project = struct;
 
+% Add paths
+addpath('fx');
+
 % Read logo image
 [logo_img,logo_map] = imread('icons/easych.png');
 logo_icon = ind2rgb(logo_img,logo_map);
@@ -234,7 +237,8 @@ handles.project_name = FileName;
 handles.project_path = PathName;
 set(handles.project_txt, 'String', handles.project_name);
 
-handles.easych_project = load(strcat(PathName, FilePath));
+handles.easych_project = load(strcat(PathName,FileName),'-mat','easych_project');
+handles.easych_project = handles.easych_project.easych_project;
 easych_project = handles.easych_project;
 
 set(findall(handles.save_pushbutton, '-property', 'enable'), 'enable', 'on');
@@ -253,27 +257,11 @@ handles.easych_project.test_value1 = 12341234;
 handles.easych_project.test_value2 = 5555;
 
 if(numel(FileName) > 0),
-    if( exist(strcat(PathName,FileName),'file') ),
-        choice = questdlg('Do you want to overwrite file?', ...
-        'File Overwrite', ...
-        'Yes','No','No');
+    handles.project_name = FileName;
+    handles.project_path = PathName;
 
-        if (strcmp(choice,'Yes') == 1),
-            handles.project_name = FileName;
-            handles.project_path = PathName;
-
-            easych_project = handles.easych_project;
-            save(strcat(PathName,FileName), 'easych_project');
-        else
-            return;
-        end    
-    else
-        handles.project_name = FileName;
-        handles.project_path = PathName;
-
-        easych_project = handles.easych_project;
-        save(strcat(PathName,FileName), 'easych_project');
-    end
+    easych_project = handles.easych_project;
+    save(strcat(PathName,FileName), 'easych_project');
 end
 
 guidata(hObject, handles);
@@ -442,6 +430,68 @@ if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 
     end
 end
 
+function [end_index, proccesed_count] = process_buffer(buffer)
+% % Preproceso
+% % Revisar el tipo de pre-proceso, al parecer no es necesario.
+% 
+% % Entrenamiento (desviación estándar)
+% if(i == 1),
+%     desv_stand = 6.3593e+03;   % inicial
+%     umbral = 300*desv_stand;
+% else
+%     umbral = (0.99*umbral)+(0.01*(std(buffer)));
+% end
+%    
+% [buffer,indicador,umbral,media,flag3] = Prep_sat(buffer,indicador,umbral);
+% buffer = [wl2' buffer'];
+% tamwl = length(wl2);
+% 
+% % Realizar delineado de ECG a partir de los puntos fiduciales.
+% [ECG_segmen,ECG_segmen_fil,Last_R_peak,senalResul] = segECG(buffer,fs,indicador);
+% 
+% % Realizar busqueda de maximos locales en referencia a los picos R
+% % candidatos ECG_segmen.Rpeak.
+% [NewpicosRI,Last_R_peak] = AjustePicoR(ECG_segmen.Rpeak,buffer,fs,Last_R_peak);        
+% ECG_segmen.Rpeak = NewpicosRI;
+% 
+% % Realizar estimacion de frecuencia cardiaca
+% Fcardiaca = FreCard(ECG_segmen.Rpeak,buffer,indicador,fs,Fcardiaca);
+% 
+% % Realizar estimacion de frecuencia respiratoria utilizando
+% % distancias entre picos R.
+% Brate_RR = AlgoritmoRR(ECG_segmen,buffer,fs,Brate_RR);
+% 
+% % Realizar estimacion de frecuencia respiratoria utilizando
+% % distancias entre pico R y base de onda S.
+% Brate_RS = AlgoritmoRS(ECG_segmen,buffer,fs,Brate_RS);
+% 
+% % Estima un retraso en el procesamiento de informacion de ECG, por
+% % ejemplo, los puntos que se pudieron delinear porque estaban
+% % incompletos.
+% [wl,w] = Delay(ECG_segmen.Rpeak,ECG_segmen.Pon,buffer,Last_R_peak,Fcardiaca);
+% 
+% % Agrupar los puntos fiduciales para enviarlos, asi mismo, asignar
+% % los indices numericos a los puntos fiduciales en las tramas
+% % procesadas consecutivas.
+% [wl2,lastref,refpoint,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,flag2] = Acoplo(tamwl,length(buffer),lastref,tambuffer,length(wl),ECG_segmen.Pon,ECG_segmen.Poff,ECG_segmen.Qon,ECG_segmen.Rpeak,ECG_segmen.Soff,ECG_segmen.Ton,ECG_segmen.Toff,indicador,refpoint,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,flag2,buffer,senal,w,Last_R_peak,flag3);
+% 
+% % Empaquetar la informacion de alarmas para procesar
+% % posteriormente.
+% [tuple,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,Brate_RR] = CheckandSend(flag2,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,Fcardiaca,flag3,tambuffer,Y,0,Brate_RR,Brate_RS,ECG_segmen.Ton,ECG_segmen.Toff,ECG_segmen.Qon,ECG_segmen.Rpeak,ECG_segmen.Soff,fs,buffer);
+
+function process_ecg(hObject)
+handles = guidata(hObject);
+
+handles.last_index_process_buffer = 1;
+handles.process_buffer_size = 25*handles.fs;
+
+% Check if buffer size is ready
+n = numel(handles.current_record.data) - handles.last_index_process_buffer;
+
+if(n > handles.process_buffer_size),
+    handles.last_index_process_buffer = handles.last_index_process_buffer + handles.process_buffer_size;
+end
+
 function timer_callback(timerHandle,timerData)
 % Read handles
 handles = guidata(timerHandle.UserData);
@@ -455,6 +505,8 @@ if(handles.monitoring == 1),
     [bytes,byte_counter] = read_serialport(timerHandle.UserData);
     
     if(byte_counter > 0),
+        fprintf('record bytes = %d\n',numel(handles.current_record.data));
+        
         % Compute start and end indexes.
         start_index = numel(handles.current_record.data);
         handles.current_record.data = [handles.current_record.data bytes];        
@@ -465,9 +517,7 @@ if(handles.monitoring == 1),
         miny = min(handles.current_record.data);
         maxy = max(handles.current_record.data);
         
-        start_i = 1;
-
-        fprintf('byte_counter = %d\n',byte_counter);
+        start_i = 1;       
         
         for i = 1:byte_counter;
             handles = guidata(timerHandle.UserData);                        
@@ -475,20 +525,23 @@ if(handles.monitoring == 1),
             
             cla(h);
 
-            if(i > w)
-                start_i = i-w;
+            if(start_index > w)
+                start_i = start_index+i-w;
             end
             
-            end_i = i;
+            end_i = start_index+i;
 
-            plot(h, start_index+start_i:start_index+end_i, handles.current_record.data(start_index+start_i:start_index+end_i));
-            plot(h, start_index+i, handles.current_record.data(start_index+i), 'or');
+            plot(h, start_i:end_i, handles.current_record.data(start_i:end_i));
+            plot(h, end_i, handles.current_record.data(end_i), 'or');
             
-            xlim(h, [start_index+i-w,start_index+i+w]);
+            xlim(h, [start_i,end_i+w]);
             ylim(h, [miny,maxy]);
 
             drawnow;
-        end 
+        end
+        
+        % Process ECG
+        process_ecg(timerHandle.UserData);        
     end    
 else
     if(timerHandle ~= 0),
@@ -531,9 +584,10 @@ if(handles.play_pressed == 0),
     msgbox(sprintf('Successfully connected to %s!',serial_port_com{:}),'Successful connection to serial port','help');
     
     % Read sampling frequency
-    fs = str2double(get(handles.fs_txt,'String'));
+    handles.fs = str2double(get(handles.fs_txt,'String'));
+    guidata(hObject, handles);
     
-    if(isnan(fs)),
+    if(isnan(handles.fs)),
         msgbox('Plese give a numeric value (decimal values separated by dot (.)) for sampling frequency Fs!','Error with sampling frequency','error');
         return;
     end
@@ -555,7 +609,7 @@ if(handles.play_pressed == 0),
     handles.monitoring_timer.StartDelay = 0;
     
     % Reduce the speed in a factor of 10
-    handles.monitoring_timer.Period = 10/fs;
+    handles.monitoring_timer.Period = 10/handles.fs;
     handles.monitoring_timer.BusyMode = 'drop';
     handles.monitoring_timer.ExecutionMode = 'fixedRate';
     handles.monitoring_timer.TimerFcn = @timer_callback;
@@ -927,6 +981,12 @@ function load_pushbutton_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+handles = guidata(hObject);
+[FileName,PathName] = uigetfile('db/*.mat','Please select a record file...');
+handles.file_record_name = FileName;
+handles.file_record_path = PathName;
+set(handles.file_record_txt, 'String', handles.file_record_name);
+guidata(hObject, handles);
 
 
 function fs_txt_Callback(hObject, eventdata, handles)
