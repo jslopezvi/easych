@@ -9,7 +9,7 @@ function [fiducial_points,last_Rpeak,delineated_ecg]= delineate_ecg(ecg,fs)
 %   frecuencia de muestreo y el algoritmo a utilizar para estimar el pico R.
 
 if(nargin<5),
-    [Rpeaks,delineated_ecg] = QRS_HIBRIDO(ecg,fs);
+    [Rpeaks,delineated_ecg] = hybrid_qrs(ecg,fs);
     last_Rpeak = max(Rpeaks);
 end
 

@@ -24,6 +24,7 @@ while w <= long
     catch
         Flag = 1;
         w = w+1;
+        continue;
     end
     [valMax,posMax] = max(ventana1);
     [valMin,posMin] = min(ventana1);

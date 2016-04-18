@@ -4,10 +4,10 @@ addpath('sim');
 [signal, fs] = load_mitbih_arrhythmia_record('rec101',360);
 
 % Time window for analysis
-time_window_for_analysis = ceil(1000/fs);
+time_window_for_analysis = ceil(4000/fs);
 
 % Training time in seconds
-training_time = 3*time_window_for_analysis;
+training_time = 2*time_window_for_analysis;
 
 % Time between samples.
 time_per_sample = 1/fs;
@@ -36,11 +36,11 @@ samples_processed_counter = 0;
 % Analyze train_buffer
 ecg_analysis_data = analyze_ecg_buffer(train_buffer, fs, 1, filter_threshold);
 
-% Save data in ecg_analysis cell array
-ecg_analysis(end+1) = {ecg_analysis_data};
-
 % Save delays.
 ecg_analysis_data.delay = numel(ecg_analysis_data.filtered_buffer) - max(ecg_analysis_data.fiducial_points.Toffs);
+
+% Save data in ecg_analysis cell array
+ecg_analysis(end+1) = {ecg_analysis_data};
 
 samples_processed_counter = samples_processed_counter + numel(train_buffer) - ecg_analysis_data.delay;
 start_index = samples_processed_counter + 1;
@@ -53,7 +53,55 @@ while(start_index+number_of_samples_per_time_window < numel(signal)),
     ecg_analysis(end+1) = {ecg_analysis_data}; %#ok<SAGROW>
     samples_processed_counter = samples_processed_counter + numel(analysis_buffer) - ecg_analysis_data.delay;
     start_index = samples_processed_counter + 1;
+    fprintf('Rpeaks found on %d samples = %d\n',numel(analysis_buffer),numel(ecg_analysis_data.fiducial_points.Rpeaks));
+    fprintf('Estimated Heart Rate = %d and Respiratory Rate = %d\n',ecg_analysis_data.HR, ecg_analysis_data.BR);
 end
 
-fprintf('ecg_analysis length = %d\n', numel(ecg_analysis));
+% Totalize ECG analysis
+analysis_count = numel(ecg_analysis);
+
+fprintf('ecg_analysis length = %d\n', analysis_count);
 fprintf('final delay = %d\n', ecg_analysis_data.delay);
+fprintf('time_window_for_analysis = %d segs\n',time_window_for_analysis);
+
+% Heart rates
+HRs = zeros(1, analysis_count);
+
+% Respiration rates
+BRs = zeros(1, analysis_count);
+
+% Representative rate times
+Rts = zeros(1, analysis_count);
+
+% Fiducial points for all the signal recording
+Pons = [];
+Poffs = [];
+Qons = [];
+Rpeaks = [];
+Soffs = [];
+Tons = [];
+Toffs = [];
+
+% Read estimated heart and respiratory rates with their respective times.
+% Associated times for rates are computed as reference_index +
+% filtered_buffer size - delay.
+for i=1:analysis_count,
+    HRs(i) = ecg_analysis{i}.HR;    
+    BRs(i) = ecg_analysis{i}.BR;
+    Rts(i) = ecg_analysis{i}.reference_index + numel(ecg_analysis{i}.filtered_buffer) - ecg_analysis{i}.delay;
+    
+    Pons = horzcat(Pons, ecg_analysis{i}.fiducial_points.Pons); %#ok<AGROW>
+    Poffs = horzcat(Poffs, ecg_analysis{i}.fiducial_points.Poffs); %#ok<AGROW>
+    Qons = horzcat(Qons, ecg_analysis{i}.fiducial_points.Qons); %#ok<AGROW>
+    Rpeaks = horzcat(Rpeaks, ecg_analysis{i}.fiducial_points.Rpeaks); %#ok<AGROW>
+    Soffs = horzcat(Soffs, ecg_analysis{i}.fiducial_points.Soffs); %#ok<AGROW>
+    Tons = horzcat(Tons, ecg_analysis{i}.fiducial_points.Tons); %#ok<AGROW>
+    Toffs = horzcat(Toffs, ecg_analysis{i}.fiducial_points.Toffs); %#ok<AGROW>
+end
+
+plot(Rts, HRs,'b');
+hold on;
+plot(Rts, BRs,'r');
+legend('Heart Rate','Respiratory Rate');
+
+[Exist,Type] = alarms_module(BRs,HRs,fs,Tons,Toffs,Qons,Rpeaks,Soffs,signal);

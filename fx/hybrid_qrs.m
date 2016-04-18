@@ -1,4 +1,4 @@
-function [ picoR, senalResul ] = QRS_HIBRIDO( senal, fs )
+function [ picoR, senalResul ] = hybrid_qrs( senal, fs )
 %%%%%%%%HELP%%%%%%%%%%%%
 % Algoritmo que realiza estimacion de marca fiducial
 % del pico R, utilizando:
