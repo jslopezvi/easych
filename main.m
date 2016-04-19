@@ -43,7 +43,6 @@ else
 end
 % End initialization code - DO NOT EDIT
 
-
 % --- Executes just before main is made visible.
 function main_OpeningFcn(hObject, eventdata, handles, varargin)
 % This function has no output args, see OutputFcn.
@@ -56,7 +55,7 @@ function main_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.output = hObject;
 
 % Init EasyCH project struct
-global easych_project;
+global easych_project; %#ok<*NUSED>
 handles.easych_project = struct;
 
 % Add paths
@@ -119,6 +118,7 @@ handles.time_table.Data = {'SDNN',sprintf('%0.2f',0);'SDANN',sprintf('%0.2f',0);
 % Frequency measures
 handles.freq_table.Data = {'HF',sprintf('%0.2f',0);'LF',sprintf('%0.2f',0);'VLF',sprintf('%0.2f',0);'ULF',sprintf('%0.2f',0);'LF/HF',sprintf('%0.2f',0);};
 
+% Init monitoring variables
 % Save play button status
 handles.play_pressed = 0;
 
@@ -139,8 +139,28 @@ handles.serial_port = 0;
 handles.elapsed_time = 0;
 
 % Init ecg record
-handles.current_record = struct;
-handles.current_record.data = [];
+handles.record_data = [];
+
+% Flag for training ECG recording
+handles.training = 0;
+
+% Time window for analysis
+handles.time_window_for_analysis = 0;
+
+% Training time in seconds
+handles.training_time = 0;
+
+% Time between samples.
+handles.time_per_sample = 0;
+
+% Number of samples per time window.
+handles.number_of_samples_per_time_window = 0;
+
+% Number of time windows for training
+handles.number_of_time_windows_for_training = 0;
+
+% Filter threshold
+handles.filter_threshold = 0;
 
 % Init recordings_table
 handles.recordings = {};
@@ -149,6 +169,60 @@ handles.recordings_table.Data = {};
 % Init recordings_table
 handles.alarms = {};
 handles.alarms_table.Data = {};
+
+% Init ecg_analysis variables
+handles.ecg_analysis = {};
+handles.samples_processed_counter = 0;
+
+% Heart rates
+handles.HRs = [];
+
+% Respiration rates
+handles.BRs = [];
+
+% Representative rate times
+handles.Rts = [];
+
+% Fiducial points for all the signal recording
+handles.Pons = [];
+handles.Poffs = [];
+handles.Qons = [];
+handles.Rpeaks = [];
+handles.Soffs = [];
+handles.Tons = [];
+handles.Toffs = [];
+
+% Start indexes for analysis and plotting
+handles.start_index_for_analysis = 0;
+handles.start_index_for_plotting = 0;
+
+% Save current heart rate and respiratory rate.
+handles.current_hr = -100;
+handles.current_hr_step = 0;
+handles.current_hr_cum = 0;
+handles.current_br = -100;
+handles.current_br_step = 0;
+handles.current_br_cum = 0;
+
+% Load heart icons
+[heart32_img,heart32_map] = imread('icons/fheart_32.png');
+% handles.heart32_icon = ind2rgb(heart32_img,heart32_map);
+handles.heart32_icon = heart32_img;
+
+[heart64_img,heart64_map] = imread('icons/heart_64.png');
+handles.heart64_icon = ind2rgb(heart64_img,heart64_map);
+
+% Load lungs icons
+[lungs32_img,lungs32_map] = imread('icons/flungs_32.png');
+% handles.lungs32_icon = ind2rgb(lungs32_img,lungs32_map);
+handles.lungs32_icon = lungs32_img;
+
+[lungs64_img,lungs64_map] = imread('icons/lungs_64.png');
+handles.lungs64_icon = ind2rgb(lungs64_img,lungs64_map);
+
+% Init heart and lungs timers
+handles.heart_timer = 0;
+handles.lungs_timer = 0;
 
 % Init panels states
 % Hide axes
@@ -213,10 +287,10 @@ set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'off');
-set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
 
-set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'off');
-set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
 
 set(findall(handles.compute_hrv_pushbutton, '-property', 'enable'), 'enable', 'off');
 set(findall(handles.show_recording_pushbutton, '-property', 'enable'), 'enable', 'off');
@@ -239,7 +313,7 @@ set(handles.project_txt, 'String', handles.project_name);
 
 handles.easych_project = load(strcat(PathName,FileName),'-mat','easych_project');
 handles.easych_project = handles.easych_project.easych_project;
-easych_project = handles.easych_project;
+easych_project = handles.easych_project; %#ok<NASGU>
 
 set(findall(handles.save_pushbutton, '-property', 'enable'), 'enable', 'on');
 guidata(hObject, handles);
@@ -260,7 +334,7 @@ if(numel(FileName) > 0),
     handles.project_name = FileName;
     handles.project_path = PathName;
 
-    easych_project = handles.easych_project;
+    easych_project = handles.easych_project; %#ok<NASGU>
     save(strcat(PathName,FileName), 'easych_project');
 end
 
@@ -291,8 +365,9 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');        
-        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'off');
-        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'on');
     case 2 % Online
         fprintf('Selected Online plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'on');
@@ -302,6 +377,7 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'off');
     case 3 % Alarm Viewer
         fprintf('Selected AlarmViewer plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
@@ -309,8 +385,9 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
-        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'off');
-        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'off');
+        set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'on');
     otherwise % File Record
         fprintf('Selected FileRecord plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
@@ -320,6 +397,7 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
+        set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'on');
 end
 
 % --- Executes during object creation, after setting all properties.
@@ -430,72 +508,17 @@ if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 
     end
 end
 
-function [end_index, proccesed_count] = process_buffer(buffer)
-% % Preproceso
-% % Revisar el tipo de pre-proceso, al parecer no es necesario.
-% 
-% % Entrenamiento (desviación estándar)
-% if(i == 1),
-%     desv_stand = 6.3593e+03;   % inicial
-%     umbral = 300*desv_stand;
-% else
-%     umbral = (0.99*umbral)+(0.01*(std(buffer)));
-% end
-%    
-% [buffer,indicador,umbral,media,flag3] = Prep_sat(buffer,indicador,umbral);
-% buffer = [wl2' buffer'];
-% tamwl = length(wl2);
-% 
-% % Realizar delineado de ECG a partir de los puntos fiduciales.
-% [ECG_segmen,ECG_segmen_fil,Last_R_peak,senalResul] = segECG(buffer,fs,indicador);
-% 
-% % Realizar busqueda de maximos locales en referencia a los picos R
-% % candidatos ECG_segmen.Rpeak.
-% [NewpicosRI,Last_R_peak] = AjustePicoR(ECG_segmen.Rpeak,buffer,fs,Last_R_peak);        
-% ECG_segmen.Rpeak = NewpicosRI;
-% 
-% % Realizar estimacion de frecuencia cardiaca
-% Fcardiaca = FreCard(ECG_segmen.Rpeak,buffer,indicador,fs,Fcardiaca);
-% 
-% % Realizar estimacion de frecuencia respiratoria utilizando
-% % distancias entre picos R.
-% Brate_RR = AlgoritmoRR(ECG_segmen,buffer,fs,Brate_RR);
-% 
-% % Realizar estimacion de frecuencia respiratoria utilizando
-% % distancias entre pico R y base de onda S.
-% Brate_RS = AlgoritmoRS(ECG_segmen,buffer,fs,Brate_RS);
-% 
-% % Estima un retraso en el procesamiento de informacion de ECG, por
-% % ejemplo, los puntos que se pudieron delinear porque estaban
-% % incompletos.
-% [wl,w] = Delay(ECG_segmen.Rpeak,ECG_segmen.Pon,buffer,Last_R_peak,Fcardiaca);
-% 
-% % Agrupar los puntos fiduciales para enviarlos, asi mismo, asignar
-% % los indices numericos a los puntos fiduciales en las tramas
-% % procesadas consecutivas.
-% [wl2,lastref,refpoint,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,flag2] = Acoplo(tamwl,length(buffer),lastref,tambuffer,length(wl),ECG_segmen.Pon,ECG_segmen.Poff,ECG_segmen.Qon,ECG_segmen.Rpeak,ECG_segmen.Soff,ECG_segmen.Ton,ECG_segmen.Toff,indicador,refpoint,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,flag2,buffer,senal,w,Last_R_peak,flag3);
-% 
-% % Empaquetar la informacion de alarmas para procesar
-% % posteriormente.
-% [tuple,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,Brate_RR] = CheckandSend(flag2,TotalPon,TotalPoff,TotalQon,TotalRpeak,TotalSoff,TotalTon,TotalToff,Fcardiaca,flag3,tambuffer,Y,0,Brate_RR,Brate_RS,ECG_segmen.Ton,ECG_segmen.Toff,ECG_segmen.Qon,ECG_segmen.Rpeak,ECG_segmen.Soff,fs,buffer);
-
-function process_ecg(hObject)
-handles = guidata(hObject);
-
-handles.last_index_process_buffer = 1;
-handles.process_buffer_size = 25*handles.fs;
-
-% Check if buffer size is ready
-n = numel(handles.current_record.data) - handles.last_index_process_buffer;
-
-if(n > handles.process_buffer_size),
-    handles.last_index_process_buffer = handles.last_index_process_buffer + handles.process_buffer_size;
-end
+function timer_stop_callback(timerHandle,timerData)
+handles = guidata(timerHandle.UserData);
+handles.monitoring = 0;
+handles.play_pressed = 0;
+guidata(timerHandle.UserData, handles);
+disp('timer_stop_callback!');
 
 function timer_callback(timerHandle,timerData)
 % Read handles
 handles = guidata(timerHandle.UserData);
-if(handles.monitoring == 1),        
+if(handles.monitoring == 1 && handles.play_pressed == 1),
     handles.elapsed_time = handles.elapsed_time + 1;
     
     fprintf('Running timer... Elapsed time %d\n',handles.elapsed_time);
@@ -503,45 +526,188 @@ if(handles.monitoring == 1),
     
     % Read serial port
     [bytes,byte_counter] = read_serialport(timerHandle.UserData);
-    
+        
     if(byte_counter > 0),
-        fprintf('record bytes = %d\n',numel(handles.current_record.data));
+        fprintf('record bytes = %d\n',numel(handles.record_data));
         
-        % Compute start and end indexes.
-        start_index = numel(handles.current_record.data);
-        handles.current_record.data = [handles.current_record.data bytes];        
+        % Compute start and end indexes.        
+        start_index_for_plotting = numel(handles.record_data);        
+        handles.record_data = [handles.record_data bytes];
         guidata(timerHandle.UserData, handles);
-
-        w = 100;
+        total_byte_count = numel(handles.record_data);
         
-        miny = min(handles.current_record.data);
-        maxy = max(handles.current_record.data);
+        if(handles.training == 1),
+            training_window_size = handles.number_of_time_windows_for_training*handles.number_of_samples_per_time_window;
+            if(total_byte_count >= training_window_size),
+                % In the first phase of analysis, 'train' detector and reference time
+                % windows. This aims for searching a reference R peak for further time
+                % window detection. Always find a R peak as a reference for time window start.
+                train_buffer = handles.record_data(1:training_window_size);
+
+                % Initial filtering threshold for training
+                desv_stand = 6.3593e+03;   % Initial standard deviation
+                handles.filter_threshold = 300*desv_stand;             
+
+                % Analyze train_buffer
+                ecg_analysis_data = analyze_ecg_buffer(train_buffer, handles.fs, 1, handles.filter_threshold);
+
+                % Save delays.
+                ecg_analysis_data.delay = numel(ecg_analysis_data.filtered_buffer) - max(ecg_analysis_data.fiducial_points.Toffs);
+                set(handles.delay_value, 'String', sprintf('%03.2f', ecg_analysis_data.delay/handles.fs));
+
+                % Save data in ecg_analysis cell array
+                handles.ecg_analysis(end+1) = {ecg_analysis_data};
+
+                handles.samples_processed_counter = handles.samples_processed_counter + numel(train_buffer) - ecg_analysis_data.delay;
+                handles.start_index_for_analysis = handles.samples_processed_counter + 1;                                
+                
+                % Save computed values
+                % Heart rates                
+                handles.HRs(end+1) = ecg_analysis_data.HR;                
+                if(ecg_analysis_data.HR ~= Inf && ecg_analysis_data.HR ~= 0),
+                    handles.current_hr = ecg_analysis_data.HR;
+                    set(handles.heart_label, 'String', sprintf('%d', handles.current_hr));                    
+                end                                
+
+                % Respiration rates
+                handles.BRs(end+1) = ecg_analysis_data.BR;
+                if(ecg_analysis_data.BR ~= Inf && ecg_analysis_data.BR ~= 0),
+                    handles.current_br = ecg_analysis_data.BR;
+                    set(handles.respiratory_label, 'String', sprintf('%d', handles.current_br));
+                end
+
+                % Representative rate times
+                handles.Rts(end+1) = ecg_analysis_data.reference_index + numel(ecg_analysis_data.filtered_buffer) - ecg_analysis_data.delay;
+
+                % Fiducial points for all the signal recording
+                handles.Pons = horzcat(handles.Pons, ecg_analysis_data.fiducial_points.Pons);
+                handles.Poffs = horzcat(handles.Poffs, ecg_analysis_data.fiducial_points.Poffs);
+                handles.Qons = horzcat(handles.Qons, ecg_analysis_data.fiducial_points.Qons);
+                handles.Rpeaks = horzcat(handles.Rpeaks, ecg_analysis_data.fiducial_points.Rpeaks);
+                handles.Soffs = horzcat(handles.Soffs, ecg_analysis_data.fiducial_points.Soffs);
+                handles.Tons = horzcat(handles.Tons, ecg_analysis_data.fiducial_points.Tons);
+                handles.Toffs = horzcat(handles.Toffs, ecg_analysis_data.fiducial_points.Toffs);
+                
+                handles.training = 0;
+                guidata(timerHandle.UserData, handles);
+            end            
+        else
+            % Process ECG
+            if(numel(handles.record_data) - handles.start_index_for_analysis >= handles.number_of_samples_per_time_window),
+                analysis_buffer = handles.record_data(handles.start_index_for_analysis:handles.start_index_for_analysis+handles.number_of_samples_per_time_window);
+                handles.filter_threshold = (0.99*handles.filter_threshold)+(0.01*(std(analysis_buffer)));                
+                ecg_analysis_data = analyze_ecg_buffer(analysis_buffer, handles.fs, handles.start_index_for_analysis, handles.filter_threshold);
+                ecg_analysis_data.delay = numel(ecg_analysis_data.filtered_buffer) - max(ecg_analysis_data.fiducial_points.Toffs);
+                set(handles.delay_value, 'String', sprintf('%03.2f', ecg_analysis_data.delay/handles.fs));
+                handles.ecg_analysis(end+1) = {ecg_analysis_data};
+                handles.samples_processed_counter = handles.samples_processed_counter + numel(analysis_buffer) - ecg_analysis_data.delay;
+                handles.start_index_for_analysis = handles.samples_processed_counter + 1;
+                fprintf('Rpeaks found on %d samples = %d\n',numel(analysis_buffer),numel(ecg_analysis_data.fiducial_points.Rpeaks));
+                fprintf('Estimated Heart Rate = %d and Respiratory Rate = %d\n',ecg_analysis_data.HR, ecg_analysis_data.BR);
+                
+                % Save computed values
+                % Heart rates                
+                handles.HRs(end+1) = ecg_analysis_data.HR;                
+                if(ecg_analysis_data.HR ~= Inf && ecg_analysis_data.HR ~= 0),
+                    handles.current_hr = ecg_analysis_data.HR;
+                    set(handles.heart_label, 'String', sprintf('%d', handles.current_hr));
+                end                                
+
+                % Respiration rates
+                handles.BRs(end+1) = ecg_analysis_data.BR;
+                if(ecg_analysis_data.BR ~= Inf && ecg_analysis_data.BR ~= 0),
+                    handles.current_br = ecg_analysis_data.BR;
+                    set(handles.respiratory_label, 'String', sprintf('%d', handles.current_br));
+                end
+
+                % Representative rate times
+                handles.Rts(end+1) = ecg_analysis_data.reference_index + numel(ecg_analysis_data.filtered_buffer) - ecg_analysis_data.delay;
+
+                % Fiducial points for all the signal recording
+                handles.Pons = horzcat(handles.Pons, ecg_analysis_data.fiducial_points.Pons);
+                handles.Poffs = horzcat(handles.Poffs, ecg_analysis_data.fiducial_points.Poffs);
+                handles.Qons = horzcat(handles.Qons, ecg_analysis_data.fiducial_points.Qons);
+                handles.Rpeaks = horzcat(handles.Rpeaks, ecg_analysis_data.fiducial_points.Rpeaks);
+                handles.Soffs = horzcat(handles.Soffs, ecg_analysis_data.fiducial_points.Soffs);
+                handles.Tons = horzcat(handles.Tons, ecg_analysis_data.fiducial_points.Tons);
+                handles.Toffs = horzcat(handles.Toffs, ecg_analysis_data.fiducial_points.Toffs);
+                
+                disp('Updating heart icon...');
+                set(handles.heart_pushbutton,'CData',handles.heart32_icon);
+                drawnow;
+                pause(0.05);
+                set(handles.heart_pushbutton,'CData',handles.heart64_icon);
+                drawnow;
+
+                disp('Updating lungs icon...');
+                set(handles.respiratory_pushbutton,'CData',handles.lungs32_icon);
+                drawnow;
+                pause(0.05);
+                set(handles.respiratory_pushbutton,'CData',handles.lungs64_icon);
+                drawnow;
+        
+                guidata(timerHandle.UserData, handles);
+            end
+        end                
+        
+        % Plot window limits
+        
+        r_s = 5;
+        r_e = 300;
+        
+        w_s = 500;
+        w_e = 100;
+        
+        miny = min(handles.record_data);
+        maxy = max(handles.record_data);
         
         start_i = 1;       
         
-        for i = 1:byte_counter;
-            handles = guidata(timerHandle.UserData);                        
+        for i = 1:10:byte_counter;
+            handles = guidata(timerHandle.UserData);
             h = handles.current_monitoring_axes;
             
             cla(h);
 
-            if(start_index > w)
-                start_i = start_index+i-w;
+            if(start_index_for_plotting+i > w_s),
+                start_i = start_index_for_plotting+i-w_s;
             end
             
-            end_i = start_index+i;
+            end_i = start_index_for_plotting+i;
 
-            plot(h, start_i:end_i, handles.current_record.data(start_i:end_i));
-            plot(h, end_i, handles.current_record.data(end_i), 'or');
+            plot(h, start_i:end_i, handles.record_data(start_i:end_i));
+            plot(h, end_i, handles.record_data(end_i), 'or');
             
-            xlim(h, [start_i,end_i+w]);
+            xlim(h, [start_i,end_i+w_e]);
             ylim(h, [miny,maxy]);
 
             drawnow;
-        end
+        end         
         
-        % Process ECG
-        process_ecg(timerHandle.UserData);        
+        cla(handles.heart_rate_axes);
+        cla(handles.respiratory_rate_axes);
+        
+        start_index_for_rates = numel(handles.HRs);
+        
+        if(start_index_for_rates > 0),
+            start_i = 1;
+
+            if(start_index_for_rates > r_s),
+                start_i = start_index_for_rates - r_s;
+            end
+
+            end_i = start_index_for_rates;
+
+            plot(handles.heart_rate_axes, handles.Rts(start_i:end_i), handles.HRs(start_i:end_i));
+            plot(handles.respiratory_rate_axes, handles.Rts(start_i:end_i), handles.BRs(start_i:end_i));
+
+            xlim(handles.heart_rate_axes, [handles.Rts(start_i),handles.Rts(end_i)+r_e]);
+            ylim(handles.heart_rate_axes, [0 max(handles.HRs(start_i:end_i))*1.5]);
+            xlim(handles.respiratory_rate_axes, [handles.Rts(start_i),handles.Rts(end_i)+r_e]);
+            ylim(handles.respiratory_rate_axes, [0 max(handles.BRs(start_i:end_i))*1.5]);
+
+            drawnow;
+        end        
     end    
 else
     if(timerHandle ~= 0),
@@ -556,6 +722,8 @@ function play_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to play_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+handles = guidata(hObject);
 
 if(handles.play_pressed == 0),
     % Read serial port
@@ -610,9 +778,9 @@ if(handles.play_pressed == 0),
     
     % Reduce the speed in a factor of 10
     handles.monitoring_timer.Period = 10/handles.fs;
-    handles.monitoring_timer.BusyMode = 'drop';
     handles.monitoring_timer.ExecutionMode = 'fixedRate';
     handles.monitoring_timer.TimerFcn = @timer_callback;
+    handles.monitoring_timer.StopFcn = @timer_stop_callback;
     
     guidata(hObject, handles);
     
@@ -623,16 +791,49 @@ if(handles.play_pressed == 0),
     grid(handles.current_monitoring_axes, 'minor');
     hold(handles.current_monitoring_axes, 'on');
     
+    % Time window for analysis
+    handles.time_window_for_analysis = ceil(3000/handles.fs);
+
+    % Training time in seconds
+    handles.training_time = 2*handles.time_window_for_analysis;
+
+    % Time between samples.
+    handles.time_per_sample = 1/handles.fs;
+
+    % Number of samples per time window.
+    handles.number_of_samples_per_time_window = floor(handles.time_window_for_analysis/handles.time_per_sample);
+
+    % Number of time windows for training
+    handles.number_of_time_windows_for_training = floor(handles.training_time/handles.time_window_for_analysis);
+    
+    if(handles.training == 0),
+        handles.training = 1;
+    end
+    
+    guidata(hObject, handles);
+    
     start(handles.monitoring_timer);
 
     if(isvalid(hObject)),
         guidata(hObject, handles);
     end
 elseif(handles.play_pressed == 1),
-    handles.monitoring = 0;
-    handles.play_pressed = 0;
-    handles.monitoring_timer.UserData = hObject;
-    guidata(hObject, handles);
+    % Stop timer
+    stop(handles.monitoring_timer);
+    disp('Timer stopped!');
+    
+    % Close serial port
+    if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 1),
+        fclose(handles.serial_port);
+        delete(handles.serial_port);
+        msgbox('Successfully disconnected!','Successful disconnection to serial port','help');
+    end                   
+
+    % Init monitoring_timer
+    handles.monitoring_timer = 0;
+
+    % Init serial port
+    handles.serial_port = 0;
     
     [play_img,play_map] = imread('icons/play.png');
     play_icon = ind2rgb(play_img,play_map);
@@ -642,15 +843,81 @@ elseif(handles.play_pressed == 1),
     handles.current_monitoring_axes = handles.hidden_axes;
     handles.monitoring_timer.UserData = hObject;
     
-    stop(handles.monitoring_timer);
+    % Save play button status
+    handles.play_pressed = 0;
+
+    % Set online monitoring flag
+    handles.monitoring = 0;
     
-    if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 1),
-        fclose(handles.serial_port);
-        delete(handles.serial_port);
-        msgbox('Successfully disconnected!','Successful disconnection to serial port','help');
-    end
+    guidata(hObject, handles);
+    handles = guidata(hObject);
     
-    disp('Timer stopped!');
+    % Init monitoring variables
+    % Selected row indices for recording and alarms tables.
+    handles.current_row_alarms_table = 0;
+    handles.current_row_recordings_table = 0;
+
+    % Init elapsed time
+    handles.elapsed_time = 0;
+
+    % Init ecg record
+    handles.record_data = [];
+
+    % Flag for training ECG recording
+    handles.training = 0;
+
+    % Time window for analysis
+    handles.time_window_for_analysis = 0;
+
+    % Training time in seconds
+    handles.training_time = 0;
+
+    % Time between samples.
+    handles.time_per_sample = 0;
+
+    % Number of samples per time window.
+    handles.number_of_samples_per_time_window = 0;
+
+    % Number of time windows for training
+    handles.number_of_time_windows_for_training = 0;
+
+    % Filter threshold
+    handles.filter_threshold = 0;
+
+    % Init recordings_table
+    handles.recordings = {};
+    handles.recordings_table.Data = {};
+
+    % Init recordings_table
+    handles.alarms = {};
+    handles.alarms_table.Data = {};
+
+    % Init ecg_analysis variables
+    handles.ecg_analysis = {};
+    handles.samples_processed_counter = 0;
+
+    % Heart rates
+    handles.HRs = [];
+
+    % Respiration rates
+    handles.BRs = [];
+
+    % Representative rate times
+    handles.Rts = [];
+
+    % Fiducial points for all the signal recording
+    handles.Pons = [];
+    handles.Poffs = [];
+    handles.Qons = [];
+    handles.Rpeaks = [];
+    handles.Soffs = [];
+    handles.Tons = [];
+    handles.Toffs = [];
+
+    % Start indexes for analysis and plotting
+    handles.start_index_for_analysis = 0;
+    handles.start_index_for_plotting = 0;        
+        
     guidata(hObject, handles);
 else
     msgbox('Unkown monitoring status!','Warning','war');
@@ -1051,11 +1318,6 @@ function easych_figure_CloseRequestFcn(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 handles = guidata(hObject);
-
-% Stop timer if present
-if(handles.monitoring_timer ~= 0),
-    stop(handles.monitoring_timer);
-end
 
 % Close and delete serial port if present
 if(handles.serial_port ~= 0),

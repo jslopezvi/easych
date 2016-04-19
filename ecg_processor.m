@@ -23,7 +23,6 @@ number_of_time_windows_for_training = floor(training_time/time_window_for_analys
 % In the first phase of analysis, 'train' detector and reference time
 % windows. This aims for searching a reference R peak for further time
 % window detection. Always find a R peak as a reference for time window start.
-
 train_buffer = signal(1:number_of_time_windows_for_training*number_of_samples_per_time_window);
 
 % Initial filtering threshold for training

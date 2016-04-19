@@ -45,9 +45,6 @@ ecg_analysis_data.HR = HR;
 % Save estimated respiratory rate.
 ecg_analysis_data.BR = BR;
 
-% Save filtering threshold.
-ecg_analysis_data.filter_threshold = filter_threshold;
-
 % Save filtered buffer.
 ecg_analysis_data.filtered_buffer = filtered_buffer;
 
