@@ -1,13 +1,14 @@
 % Simulates an ECG device by sending to serial port ECG signals from
 % synthetic database or real databases such us MIT-BIH.
-
+clc;
 addpath('sim');
 serial_port_com = 'COM2';
 serial_port_baudrate = 115200;
 
 % The simulation is possible thanks to VSPE sofware (in Microsoft Windows),
+% downloadable from http://www.eterlogic.com/downloads/SetupVSPE.zip,
 % which creates a pair of virtual serial ports. This simulator writes data
-% to COM2 (by default) and EasyCH reads data on COM3 serial port. Default
+% to COM2 (by default) and EasyCH reads data on COM1 serial port. Default
 % baudrate for transfer is 115200 which has an approximate maximum transfer
 % of 11520 bytes per second. If we send int values, 4 bytes each one,
 % then we can send 2880 values per second, which means an approximate
