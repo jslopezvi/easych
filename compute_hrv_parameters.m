@@ -13,9 +13,7 @@ for i=1:numel(nsrdb_fields),
     fs = 128;
 
     inter = diff(data);
-
     times = inter/fs;
-
     ibi = zeros(numel(times), 2);
 
     ibi(1,1) = 0;
@@ -23,76 +21,66 @@ for i=1:numel(nsrdb_fields),
 
     for j=1:numel(times)-1,
         ibi(j+1,1) = ibi(j,2) + ibi(j,1);
+    end           
+
+    t = ibi(:,1); %time (s)
+    y = ibi(:,2); %ibi (s)     
+    dy = diff(y);
+    
+    % Time domain HRV measures        
+    AVNN = mean(y);
+    SDNN = std(y);
+    
+    % Five minutes  in seconds
+    m5 = 5*60;
+    number_of_m5_segments = floor(max(t)/m5);
+    m5_segments_means = zeros(1,number_of_m5_segments);
+    m5_segments_stds = zeros(1,number_of_m5_segments);
+    
+    for k=1:number_of_m5_segments,
+        start_i = (k-1)*m5;
+        end_i = k*m5;
+        m5_t_indexes = find((t>=start_i) & (t<end_i));
+        m5_segments_means(k) = mean(y(m5_t_indexes));
+        m5_segments_stds(k) = std(y(m5_t_indexes));
     end
-
-%     datestr(now,'dd-mm-yyyy HH:MM:SS FFF')
-    % output2 = freqDomainHRV(myibi,[0 .16],[.16 .6],[.6 3], ...
-    %           16,256,128,512,128,{'lomb'},1);
-
-    fs = 128;
-    nfft = 512;
-    window = 256;
-    noverlap = 128;
-
-    t=ibi(:,1); %time (s)
-    y=ibi(:,2); %ibi (s)     
-
-%     y=y.*1000; %convert ibi to ms
-    %assumes ibi units are seconds
-
-%     maxF=fs/2;
-% 
-%     %prepare y
-%     y=detrend(y,'linear');
-%     y=y-mean(y);
-% % 
-%     deltaF=maxF/nfft;
-%     F = linspace(0.0,0.5,nfft);
-    F = 0.0:0.0005:0.4;
-    [PSD,w] = plomb(y);
-    w = w';
-%     plot(Psss);
-%     PSD=lomb2(y,t,F,false); %calc lomb psd
     
-%     plot(F,PSD);
-%     plot(t,y);
-
-%     t2 = t(1):1/fs:t(length(t));%time values for interp.
-%     y=interp1(t,y,t2','spline')'; %cubic spline interpolation
-%     y=y-mean(y); %remove mean
-%     
-%     %Calculate Welch PSD using hamming windowing    
-%     [PSD,F] = pwelch(y,window,noverlap,(nfft*2)-1,fs,'onesided'); 
-
-%     iULF = find((F>=0) & (F<=0.003));
-%     iVLF = find((F>=0.003) & (F<=0.04));
-%     iLF = find((F>=0.04) & (F<=0.15));
-%     iHF = find((F>=0.15) & (F<=0.4));
+    SDANN = std(m5_segments_means);
+    SDNNIDX = mean(m5_segments_stds);    
+    rMSSD = sqrt(mean(dy.^2));
+     
+    ady = abs(dy);
     
-    iULF = find((w>=0) & (w<=0.003));
-    iVLF = find((w>=0.003) & (w<=0.04));
-    iLF = find((w>=0.04) & (w<=0.15));
-    iHF = find((w>=0.15) & (w<=0.4));
+    pNN20 = numel(find(ady > 0.02))/numel(ady);
+    pNN50 = numel(find(ady > 0.05))/numel(ady);
     
-%     fprintf('ULF count for %s = %d\n',record_name,sum(iULF));
-%     fprintf('VLF count for %s = %d\n',record_name,sum(iVLF));
-%     fprintf('LF count for %s = %d\n',record_name,sum(iLF));
-%     fprintf('HF count for %s = %d\n',record_name,sum(iHF));
-%     fprintf('\n');
-
-    % output.lomb.hrv = calcAreas(output.lomb.f,output.lomb.psd,VLF,LF,HF,true);
-%     areaso = compute_psd_areas(F,PSD,[0 0.003], [0.003 0.04], [0.04 0.15], [0.15 0.4], false);
+    fprintf('AVNN for %s = %f\n',record_name,AVNN);
+    fprintf('SDNN for %s = %f\n',record_name,SDNN);
+    fprintf('SDANN for %s = %f\n',record_name,SDANN);
+    fprintf('SDNNIDX for %s = %f\n',record_name,SDNNIDX);
+    fprintf('rMSSD for %s = %f\n',record_name,rMSSD);
+    fprintf('pNN20 for %s = %f\n',record_name,pNN20);
+    fprintf('pNN50 for %s = %f\n',record_name,pNN50);
     
-%     aULF = trapz(F(min(iULF):max(iULF)), PSD(min(iULF):max(iULF)));
-%     aVLF = trapz(F(min(iVLF):max(iVLF)), PSD(min(iVLF):max(iVLF)));
-%     aLF = trapz(F(min(iLF):max(iLF)), PSD(min(iLF):max(iLF)));
-%     aHF = trapz(F(min(iHF):max(iHF)), PSD(min(iHF):max(iHF)));
+    % Frequency domain HRV measures
+    [PSD,F] = plomb(y,t);    
     
-    aT = trapz(PSD(min(iULF):max(iHF)));
+    iULF = find((F>=0) & (F<0.003));
+    iVLF = find((F>=0.003) & (F<0.04));
+    iLF = find((F>=0.04) & (F<0.15));
+    iHF = find((F>=0.15) & (F<0.4));
+    
+    aT = trapz(PSD(min(iULF):max(iVLF)));
     aULF = trapz(PSD(min(iULF):max(iULF)));
     aVLF = trapz(PSD(min(iVLF):max(iVLF)));
     aLF = trapz(PSD(min(iLF):max(iLF)));
     aHF = trapz(PSD(min(iHF):max(iHF)));
+    
+%     aT = trapz(F(min(iULF):max(iVLF)), PSD(min(iULF):max(iVLF)));
+%     aULF = trapz(F(min(iULF):max(iULF)), PSD(min(iULF):max(iULF)));
+%     aVLF = trapz(F(min(iVLF):max(iVLF)), PSD(min(iVLF):max(iVLF)));
+%     aLF = trapz(F(min(iLF):max(iLF)), PSD(min(iLF):max(iLF)));
+%     aHF = trapz(F(min(iHF):max(iHF)), PSD(min(iHF):max(iHF)));
     
     fprintf('aT for %s = %f\n',record_name,aT);
     fprintf('aULF for %s = %f\n',record_name,aULF);
@@ -101,17 +89,6 @@ for i=1:numel(nsrdb_fields),
     fprintf('aHF for %s = %f\n',record_name,aHF);
     fprintf('aLRHF for %s = %f\n',record_name,aLF/aHF);
     fprintf('\n');
-    
-%     fprintf('aULF for %s = %f, %f%%\n',record_name,areaso.aULF,areaso.pULF);
-%     fprintf('aVLF for %s = %f, %f%%\n',record_name,areaso.aVLF,areaso.pVLF);
-%     fprintf('aLF for %s = %f, %f%%\n',record_name,areaso.aLF,areaso.pLF);
-%     fprintf('aHF for %s = %f, %f%%\n',record_name,areaso.aHF,areaso.pHF);
-%     fprintf('\n');
-    
-%     plot(F,PSD);
-%     pause();
-
-%     datestr(now,'dd-mm-yyyy HH:MM:SS FFF')
 end
 
 % record_name = 'nsrdb/rec16265.mat';

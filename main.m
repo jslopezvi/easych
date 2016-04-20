@@ -22,7 +22,7 @@ function varargout = main(varargin)
 
 % Edit the above text to modify the response to help main
 
-% Last Modified by GUIDE v2.5 15-Apr-2016 16:26:58
+% Last Modified by GUIDE v2.5 19-Apr-2016 16:58:31
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -85,11 +85,6 @@ set(handles.save_pushbutton,'CData',save_icon);
 [play_img,play_map] = imread('icons/play.png');
 play_icon = ind2rgb(play_img,play_map);
 set(handles.play_pushbutton,'CData',play_icon);
-
-% Read record icon
-[record_img,record_map] = imread('icons/record.png');
-record_icon = ind2rgb(record_img,record_map);
-set(handles.record_pushbutton,'CData',record_icon);
 
 % Read load icon
 [load_img,load_map] = imread('icons/load.png');
@@ -164,6 +159,9 @@ handles.filter_threshold = 0;
 
 % Init recordings_table
 handles.recordings = {};
+handles.current_recording_index = 0;
+handles.current_recording_name = '';
+handles.current_recording_path = '';
 handles.recordings_table.Data = {};
 
 % Init recordings_table
@@ -205,7 +203,7 @@ handles.current_br_step = 0;
 handles.current_br_cum = 0;
 
 % Load heart icons
-[heart32_img,heart32_map] = imread('icons/fheart_32.png');
+[heart32_img,heart32_map] = imread('icons/heart_32.png');
 % handles.heart32_icon = ind2rgb(heart32_img,heart32_map);
 handles.heart32_icon = heart32_img;
 
@@ -213,7 +211,7 @@ handles.heart32_icon = heart32_img;
 handles.heart64_icon = ind2rgb(heart64_img,heart64_map);
 
 % Load lungs icons
-[lungs32_img,lungs32_map] = imread('icons/flungs_32.png');
+[lungs32_img,lungs32_map] = imread('icons/lungs_32.png');
 % handles.lungs32_icon = ind2rgb(lungs32_img,lungs32_map);
 handles.lungs32_icon = lungs32_img;
 
@@ -315,6 +313,39 @@ handles.easych_project = load(strcat(PathName,FileName),'-mat','easych_project')
 handles.easych_project = handles.easych_project.easych_project;
 easych_project = handles.easych_project; %#ok<NASGU>
 
+set(handles.first_name_txt,'String',handles.easych_project.patient_info.first_name);
+set(handles.last_name_txt,'String',handles.easych_project.patient_info.last_name);
+set(handles.sex_pop,'Value',handles.easych_project.patient_info.genre);
+set(handles.age_txt,'String',handles.easych_project.patient_info.age);
+set(handles.weight_txt,'String',handles.easych_project.patient_info.weight);
+set(handles.height_txt,'String',handles.easych_project.patient_info.height);
+set(handles.email_txt,'String',handles.easych_project.patient_info.email);
+set(handles.phone_txt,'String',handles.easych_project.patient_info.phone);
+set(handles.address_txt,'String',handles.easych_project.patient_info.address);
+set(handles.national_id_txt,'String',handles.easych_project.patient_info.national_id);
+set(handles.relevant_clinical_history_txt,'String',handles.easych_project.patient_info.relevant_clinical_history_txt);
+
+% Show axes
+set(handles.monitoring_axes, 'Visible','on');
+set(handles.heart_rate_axes, 'Visible','on');
+set(handles.respiratory_rate_axes, 'Visible','on');
+
+set(findall(handles.monitoring_panel, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.clinical_history_panel, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.alarms_panel, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
+
+set(findall(handles.fs_label, '-property', 'enable'), 'enable', 'on');
+set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
+
+set(findall(handles.compute_hrv_pushbutton, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.show_recording_pushbutton, '-property', 'enable'), 'enable', 'off');
+set(findall(handles.show_alarm_pushbutton, '-property', 'enable'), 'enable', 'off');
+
+drawnow;
 set(findall(handles.save_pushbutton, '-property', 'enable'), 'enable', 'on');
 guidata(hObject, handles);
 
@@ -330,7 +361,20 @@ handles = guidata(hObject);
 handles.easych_project.test_value1 = 12341234;
 handles.easych_project.test_value2 = 5555;
 
-if(numel(FileName) > 0),
+handles.easych_project.patient_info = struct;
+handles.easych_project.patient_info.first_name = get(handles.first_name_txt,'String');
+handles.easych_project.patient_info.last_name = get(handles.last_name_txt,'String');
+handles.easych_project.patient_info.genre = get(handles.sex_pop,'Value');
+handles.easych_project.patient_info.age = get(handles.age_txt,'String');
+handles.easych_project.patient_info.weight = get(handles.weight_txt,'String');
+handles.easych_project.patient_info.height = get(handles.height_txt,'String');
+handles.easych_project.patient_info.email = get(handles.email_txt,'String');
+handles.easych_project.patient_info.phone = get(handles.phone_txt,'String');
+handles.easych_project.patient_info.address = get(handles.address_txt,'String');
+handles.easych_project.patient_info.national_id = get(handles.national_id_txt,'String');
+handles.easych_project.patient_info.relevant_clinical_history_txt = get(handles.relevant_clinical_history_txt,'String');
+
+if(FileName ~= 0),
     handles.project_name = FileName;
     handles.project_path = PathName;
 
@@ -359,7 +403,7 @@ function plot_type_axes_Callback(hObject, eventdata, handles)
 
 switch get(handles.plot_type_axes,'Value')
     case 1 % HRV
-        fprintf('Selected HRV plot type\n');
+%         fprintf('Selected HRV plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
@@ -369,7 +413,7 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'on');
     case 2 % Online
-        fprintf('Selected Online plot type\n');
+%         fprintf('Selected Online plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'on');
@@ -379,7 +423,7 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'off');
     case 3 % Alarm Viewer
-        fprintf('Selected AlarmViewer plot type\n');
+%         fprintf('Selected AlarmViewer plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
@@ -389,7 +433,7 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.fs_txt, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'on');
     otherwise % File Record
-        fprintf('Selected FileRecord plot type\n');
+%         fprintf('Selected FileRecord plot type\n');
         set(findall(handles.online_settings_panel, '-property', 'enable'), 'enable', 'off');
         set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.heart_respiratory_panel, '-property', 'enable'), 'enable', 'off');
@@ -420,6 +464,13 @@ function hor_pan_check_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of hor_pan_check
+toggle_state = get(hObject,'Value');
+if(toggle_state == 1),
+%     disp('Enabling Horizontal pan...');
+    pan(handles.monitoring_axes,'xon');
+    pan(handles.heart_rate_axes,'xon');
+    pan(handles.respiratory_rate_axes,'xon');
+end
 
 
 % --- Executes on selection change in comport_pop.
@@ -519,9 +570,9 @@ function timer_callback(timerHandle,timerData)
 % Read handles
 handles = guidata(timerHandle.UserData);
 if(handles.monitoring == 1 && handles.play_pressed == 1),
-    handles.elapsed_time = handles.elapsed_time + 1;
-    
-    fprintf('Running timer... Elapsed time %d\n',handles.elapsed_time);
+%     handles.elapsed_time = handles.elapsed_time + 1;
+%     
+%     fprintf('Running timer... Elapsed time %d\n',handles.elapsed_time);
     fprintf('Running timer callback at %s...\n',datestr(timerData.Data.time,'dd-mmm-yyyy HH:MM:SS.FFF'));
     
     % Read serial port
@@ -534,7 +585,7 @@ if(handles.monitoring == 1 && handles.play_pressed == 1),
         start_index_for_plotting = numel(handles.record_data);        
         handles.record_data = [handles.record_data bytes];
         guidata(timerHandle.UserData, handles);
-        total_byte_count = numel(handles.record_data);
+        total_byte_count = numel(handles.record_data);        
         
         if(handles.training == 1),
             training_window_size = handles.number_of_time_windows_for_training*handles.number_of_samples_per_time_window;
@@ -606,12 +657,12 @@ if(handles.monitoring == 1 && handles.play_pressed == 1),
                 fprintf('Estimated Heart Rate = %d and Respiratory Rate = %d\n',ecg_analysis_data.HR, ecg_analysis_data.BR);
                 
                 % Save computed values
-                % Heart rates                
+                % Heart rates
                 handles.HRs(end+1) = ecg_analysis_data.HR;                
                 if(ecg_analysis_data.HR ~= Inf && ecg_analysis_data.HR ~= 0),
                     handles.current_hr = ecg_analysis_data.HR;
                     set(handles.heart_label, 'String', sprintf('%d', handles.current_hr));
-                end                                
+                end
 
                 % Respiration rates
                 handles.BRs(end+1) = ecg_analysis_data.BR;
@@ -632,17 +683,19 @@ if(handles.monitoring == 1 && handles.play_pressed == 1),
                 handles.Tons = horzcat(handles.Tons, ecg_analysis_data.fiducial_points.Tons);
                 handles.Toffs = horzcat(handles.Toffs, ecg_analysis_data.fiducial_points.Toffs);
                 
-                disp('Updating heart icon...');
-                set(handles.heart_pushbutton,'CData',handles.heart32_icon);
-                drawnow;
-                pause(0.05);
+%                 disp('Updating heart icon...');
+                for i=1:100,                    
+                    set(handles.heart_pushbutton,'CData',handles.heart32_icon);
+                    drawnow;
+                end
                 set(handles.heart_pushbutton,'CData',handles.heart64_icon);
                 drawnow;
 
-                disp('Updating lungs icon...');
-                set(handles.respiratory_pushbutton,'CData',handles.lungs32_icon);
-                drawnow;
-                pause(0.05);
+%                 disp('Updating lungs icon...');
+                for i=1:100,
+                    set(handles.respiratory_pushbutton,'CData',handles.lungs32_icon);
+                    drawnow;
+                end
                 set(handles.respiratory_pushbutton,'CData',handles.lungs64_icon);
                 drawnow;
         
@@ -784,7 +837,10 @@ if(handles.play_pressed == 0),
     
     guidata(hObject, handles);
     
-    handles.monitoring_timer.UserData = hObject;
+    handles.monitoring_timer.UserData = struct;
+    
+    handles.monitoring_timer.UserData.active_axes = handles.monitoring_axes;
+    handles.monitoring_timer.UserData.inactive_axes = handles.hidden_axes;
     
     grid(handles.current_monitoring_axes, 'off');
     grid(handles.current_monitoring_axes, 'on');
@@ -793,22 +849,41 @@ if(handles.play_pressed == 0),
     
     % Time window for analysis
     handles.time_window_for_analysis = ceil(3000/handles.fs);
+    handles.monitoring_timer.UserData.time_window_for_analysis = handles.time_window_for_analysis;
 
     % Training time in seconds
     handles.training_time = 2*handles.time_window_for_analysis;
+    handles.monitoring_timer.UserData.training_time = handles.training_time;
 
     % Time between samples.
     handles.time_per_sample = 1/handles.fs;
+    handles.monitoring_timer.UserData.time_per_sample = handles.time_per_sample;
 
     % Number of samples per time window.
     handles.number_of_samples_per_time_window = floor(handles.time_window_for_analysis/handles.time_per_sample);
+    handles.monitoring_timer.UserData.number_of_samples_per_time_window = handles.number_of_samples_per_time_window;
 
     % Number of time windows for training
     handles.number_of_time_windows_for_training = floor(handles.training_time/handles.time_window_for_analysis);
+    handles.monitoring_timer.UserData.number_of_time_windows_for_training = handles.number_of_time_windows_for_training;
     
     if(handles.training == 0),
         handles.training = 1;
+        handles.monitoring_timer.UserData.training = handles.training;
     end
+        
+    handles.current_recording_name = strrep(strrep(datestr(datetime('now')), ' ', '_'),':','_');
+    
+    recording_path = strcat('recs/',handles.project_name);
+    if(~exist(recording_path, 'dir')),
+        mkdir(recording_path);
+    end
+    
+    handles.current_recording_path = strcat(recording_path,'/',handles.current_recording_name,'.mat');
+    handles.recordings(end+1,:) = {handles.current_recording_name, '0', handles.current_recording_path};
+    handles.current_recording_index = handles.current_recording_index + 1;
+    set(handles.recordings_table, 'Data', handles.recordings);
+    drawnow;
     
     guidata(hObject, handles);
     
@@ -826,8 +901,19 @@ elseif(handles.play_pressed == 1),
     if(isvalid(handles.serial_port) && strcmp(handles.serial_port.Status,'open') == 1),
         fclose(handles.serial_port);
         delete(handles.serial_port);
-        msgbox('Successfully disconnected!','Successful disconnection to serial port','help');
+%         msgbox('Successfully disconnected!','Successful disconnection to serial port','help');
     end                   
+
+    data = handles.record_data; %#ok<NASGU>
+    save(handles.current_recording_path, 'data');
+    
+    total_byte_count = numel(handles.record_data);
+    handles.recordings(handles.current_recording_index, :) ...
+        = {handles.current_recording_name, sprintf('%d',total_byte_count), handles.current_recording_path};
+    set(handles.recordings_table, 'Data', handles.recordings);
+    drawnow;
+        
+    msgbox(sprintf('Record %s saved!',handles.current_recording_path),'Successful recording','help');         
 
     % Init monitoring_timer
     handles.monitoring_timer = 0;
@@ -883,14 +969,6 @@ elseif(handles.play_pressed == 1),
 
     % Filter threshold
     handles.filter_threshold = 0;
-
-    % Init recordings_table
-    handles.recordings = {};
-    handles.recordings_table.Data = {};
-
-    % Init recordings_table
-    handles.alarms = {};
-    handles.alarms_table.Data = {};
 
     % Init ecg_analysis variables
     handles.ecg_analysis = {};
@@ -1220,6 +1298,28 @@ function compute_hrv_pushbutton_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+% Compute HRV params
+h = waitbar(0,'Computing HRV parameters. Please wait...');
+handles.hrv_params = compute_hrv(handles.ibi);
+
+% Update HRV tables
+% Time measures
+handles.time_table.Data = {'SDNN',sprintf('%0.4f',handles.hrv_params.SDNN);...
+                           'SDANN',sprintf('%0.4f',handles.hrv_params.SDANN);...
+                           'RMSSD',sprintf('%0.4f',handles.hrv_params.RMSSD);...
+                           'SDSD',sprintf('%0.4f',handles.hrv_params.SDNNIDX);...
+                           'pNN50',sprintf('%0.4f%%',100*handles.hrv_params.pNN50);};
+
+% Frequency measures
+handles.freq_table.Data = {'HF',sprintf('%0.4f',handles.hrv_params.aHF);...
+                           'LF',sprintf('%0.4f',handles.hrv_params.aLF);...
+                           'VLF',sprintf('%0.4f',handles.hrv_params.aVLF);...
+                           'ULF',sprintf('%0.4f',handles.hrv_params.aULF);...
+                           'LF/HF',sprintf('%0.4f',handles.hrv_params.rLFHF);};
+
+set(findall(handles.hrv_panel, '-property', 'enable'), 'enable', 'on');
+close(h);
+guidata(hObject, handles);                       
 
 % --- Executes on button press in show_recording_pushbutton.
 function show_recording_pushbutton_Callback(hObject, eventdata, handles)
@@ -1247,12 +1347,57 @@ function load_pushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to load_pushbutton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
 handles = guidata(hObject);
+
+handles.fs = str2double(get(handles.fs_txt,'String'));
+guidata(hObject, handles);
+
+if(isnan(handles.fs)),
+    msgbox('Plese give a numeric value (decimal values separated by dot (.)) for sampling frequency Fs!','Error with sampling frequency','error');
+    return;
+end
+
 [FileName,PathName] = uigetfile('db/*.mat','Please select a record file...');
-handles.file_record_name = FileName;
-handles.file_record_path = PathName;
-set(handles.file_record_txt, 'String', handles.file_record_name);
+
+if(FileName ~= 0),
+    handles.file_record_name = FileName;
+    handles.file_record_path = PathName;
+    set(handles.file_record_txt, 'String', handles.file_record_name);
+    data_str = load(strcat(PathName,FileName),'-mat','data');
+
+    if(~isstruct(data_str) || ~isfield(data_str, 'data')),
+        msgbox('Please provide a valid .mat file with record saved in data variable!','Error loading record file.','error');
+        return;
+    end
+
+    handles.current_load_data = data_str.data;
+
+    switch get(handles.plot_type_axes,'Value')
+        case 1 % HRV            
+            inter = diff(handles.current_load_data);
+            times = inter/handles.fs;
+            handles.ibi = zeros(numel(times), 2);
+
+            handles.ibi(1,1) = 0;
+            handles.ibi(:,2) = times;
+
+            for j=1:numel(times)-1,
+                handles.ibi(j+1,1) = handles.ibi(j,2) + handles.ibi(j,1);
+            end           
+
+            t = handles.ibi(:,1); %time (s)
+            y = handles.ibi(:,2); %ibi (s)
+            plot(handles.monitoring_axes, t, y);        
+            set(findall(handles.compute_hrv_pushbutton, '-property', 'enable'), 'enable', 'on');
+        case 2 % Online
+            % Not possible.
+        case 3 % Alarm Viewer
+            
+        otherwise % File Record
+            t = 1/handles.fs:1/handles.fs:numel(handles.current_load_data)/handles.fs;
+            plot(handles.monitoring_axes, t, handles.current_load_data);
+    end
+end
 guidata(hObject, handles);
 
 
@@ -1329,3 +1474,48 @@ end
 
 % Hint: delete(hObject) closes the figure
 delete(hObject);
+
+
+% --- Executes on button press in hor_zoom_radio.
+function hor_zoom_radio_Callback(hObject, eventdata, handles)
+% hObject    handle to hor_zoom_radio (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of hor_zoom_radio
+toggle_state = get(hObject,'Value');
+if(toggle_state == 1),
+    zoom(handles.monitoring_axes,'xon');
+    zoom(handles.heart_rate_axes,'xon');
+    zoom(handles.respiratory_rate_axes,'xon');
+end
+
+
+% --- Executes on button press in no_zoom_radio.
+function no_zoom_radio_Callback(hObject, eventdata, handles)
+% hObject    handle to no_zoom_radio (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of no_zoom_radio
+toggle_state = get(hObject,'Value');
+if(toggle_state == 1),
+    zoom(handles.monitoring_axes,'off');
+    zoom(handles.heart_rate_axes,'off');
+    zoom(handles.respiratory_rate_axes,'off');
+end
+
+
+% --- Executes on button press in free_zoom_radio.
+function free_zoom_radio_Callback(hObject, eventdata, handles)
+% hObject    handle to free_zoom_radio (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of free_zoom_radio
+toggle_state = get(hObject,'Value');
+if(toggle_state == 1),
+    zoom(handles.monitoring_axes,'on');
+    zoom(handles.heart_rate_axes,'on');
+    zoom(handles.respiratory_rate_axes,'on');
+end
