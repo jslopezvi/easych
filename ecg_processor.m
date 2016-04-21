@@ -46,8 +46,8 @@ start_index = samples_processed_counter + 1;
 
 while(start_index+number_of_samples_per_time_window < numel(signal)),
     analysis_buffer = signal(start_index:start_index+number_of_samples_per_time_window);
-    ecg_analysis_data.filter_threshold = (0.99*ecg_analysis_data.filter_threshold)+(0.01*(std(analysis_buffer)));
-    ecg_analysis_data = analyze_ecg_buffer(analysis_buffer, fs, start_index, ecg_analysis_data.filter_threshold);
+    filter_threshold = (0.99*filter_threshold)+(0.01*(std(analysis_buffer)));
+    ecg_analysis_data = analyze_ecg_buffer(analysis_buffer, fs, start_index, filter_threshold);
     ecg_analysis_data.delay = numel(ecg_analysis_data.filtered_buffer) - max(ecg_analysis_data.fiducial_points.Toffs);
     ecg_analysis(end+1) = {ecg_analysis_data}; %#ok<SAGROW>
     samples_processed_counter = samples_processed_counter + numel(analysis_buffer) - ecg_analysis_data.delay;
@@ -85,7 +85,7 @@ Toffs = [];
 % Associated times for rates are computed as reference_index +
 % filtered_buffer size - delay.
 for i=1:analysis_count,
-    HRs(i) = ecg_analysis{i}.HR;    
+    HRs(i) = ecg_analysis{i}.HR;
     BRs(i) = ecg_analysis{i}.BR;
     Rts(i) = ecg_analysis{i}.reference_index + numel(ecg_analysis{i}.filtered_buffer) - ecg_analysis{i}.delay;
     
@@ -104,3 +104,37 @@ plot(Rts, BRs,'r');
 legend('Heart Rate','Respiratory Rate');
 
 [Exist,Type] = alarms_module(BRs,HRs,fs,Tons,Toffs,Qons,Rpeaks,Soffs,signal);
+
+type1 = 'Tachycardia';
+type2 = 'Bradycardia';
+type3 = 'Tachypnoea';
+type4 = 'Bradypnoea';
+type5 = 'QT Arrhythmia';
+type6 = 'QRS Arrhythmia';
+type7 = 'RR Arrhythmia';
+type8 = 'Ischemia';
+
+type1_desc = 'High Heart Rate. HR over 120 beats per minute';
+type2_desc = 'Low Heart Rate. HR under 30 beats per minute';
+type3_desc = 'High Respiratory Rate. BR over 30 respirations per minute';
+type4_desc = 'Low Respiratory Rate. BR under 6 respirations per minute';
+type5_desc = 'Loss of normal conduction, QT segment larger than 0.5 segs';
+type6_desc = 'Loss of normal conduction, QRS segment larger than 0.12 segs';
+type7_desc = 'Loss of normal conduction, RR interval larger than 4 segs';
+type8_desc = 'T wave inverted';
+
+alarms_names = {type1; type2; type3; type4; type5; type6; type7; type8};
+alarms_descriptions = {type1_desc; type2_desc; type3_desc; type4_desc; type5_desc; type6_desc; type7_desc; type8_desc};
+
+if(Exist == 1),
+    fprintf('Warning. Some alarms where generated... Take recording and send it to your Physician for reviewing with EasyCH.\n');
+    
+    fprintf('The following alarms were generated for this recording:\n');
+    for i=1:numel(Type),
+        if(Type(i) == 1),
+            fprintf('\t%s - %s\n',alarms_names{i},alarms_descriptions{i});
+        end
+    end
+else
+    fprintf('No alarms generated!\n');
+end

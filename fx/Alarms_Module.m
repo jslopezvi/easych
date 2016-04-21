@@ -10,7 +10,7 @@ function [ Exist,Type ] = alarms_module( Brate, Fcardiaca, fs, Ton, Toff, Qon, R
     % Tipo: 2  Frecuencia Cardiaca BAJA < 40 bpm "BRADICARDIA"
     if sum(Fcardiaca >= 120) > 0
         Exist = 1; Type(1)= 1;
-    elseif sum(Fcardiaca <= 40) > 0
+    elseif sum(Fcardiaca <= 30) > 0
         Exist = 1; Type(2) = 1;
     end
     
@@ -18,7 +18,7 @@ function [ Exist,Type ] = alarms_module( Brate, Fcardiaca, fs, Ton, Toff, Qon, R
     % Tipo: 4  Frecuencia Respiratoria BAJA < 12 bpm "BRADIPNEA" **REVISAR CON MEDICOS**
     if sum(Brate >= 30) > 0
         Exist = 1; Type(3) = 1;
-    elseif sum(Brate <= 12) > 0
+    elseif sum(Brate <= 6) > 0
         Exist = 1; Type(4) = 1;
     end
 
