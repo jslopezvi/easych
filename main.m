@@ -1452,6 +1452,27 @@ function compute_hrv_pushbutton_Callback(hObject, eventdata, handles)
 % Compute HRV params
 h = waitbar(0,'Computing HRV parameters. Please wait...');
 
+switch get(handles.plot_type_axes,'Value')
+        case 3 % Recordings
+        case 4 % Recordings
+            t = handles.ibi(:,1); %time (s)
+            y = handles.ibi(:,2); %ibi (s)
+            
+            cla(handles.monitoring_axes);
+            legend(handles.monitoring_axes, 'hide');
+            
+            grid(handles.monitoring_axes, 'off');
+            grid(handles.monitoring_axes, 'on');
+            grid(handles.monitoring_axes, 'minor');
+            hold(handles.monitoring_axes, 'on');
+        
+            plot(handles.monitoring_axes, t, y);
+            legend(handles.monitoring_axes, 'RR intervals diffs');
+            set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
+    otherwise
+        % Nothing to do.                                
+end
+
 handles.hrv_params = compute_hrv(handles.ibi);
 
 % Update HRV tables
@@ -1591,6 +1612,7 @@ if(handles.current_row_recordings_table ~= 0),
         % Plot signal.
         t = 1/handles.fs:1/handles.fs:numel(handles.current_load_data)/handles.fs;
         plot(handles.monitoring_axes, t, handles.current_load_data);
+        legend(handles.monitoring_axes, 'ECG recording');
         xlim(handles.monitoring_axes, [t(1) t(end)]);
         ylim(handles.monitoring_axes, [min(handles.current_load_data) max(handles.current_load_data)]);
 
@@ -1641,6 +1663,7 @@ if(handles.current_row_recordings_table ~= 0),
         % Plot signal.
         t = 1/handles.fs:1/handles.fs:numel(handles.current_load_data)/handles.fs;
         plot(handles.monitoring_axes, t, handles.current_load_data);
+        legend(handles.monitoring_axes, 'ECG recording');
         xlim(handles.monitoring_axes, [t(1) t(end)]);
         ylim(handles.monitoring_axes, [min(handles.current_load_data) max(handles.current_load_data)]);
         
@@ -1717,7 +1740,8 @@ if(FileName ~= 0),
             grid(handles.monitoring_axes, 'minor');
             hold(handles.monitoring_axes, 'on');
         
-            plot(handles.monitoring_axes, t, y);        
+            plot(handles.monitoring_axes, t, y);     
+            legend(handles.monitoring_axes, 'RR interval diffs');
             set(findall(handles.compute_hrv_pushbutton, '-property', 'enable'), 'enable', 'on');
             set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
             close(h);
@@ -1844,6 +1868,7 @@ if(FileName ~= 0),
             % Plot signal.
             t = 1/handles.fs:1/handles.fs:numel(handles.current_load_data)/handles.fs;
             plot(handles.monitoring_axes, t, handles.current_load_data);
+            legend(handles.monitoring_axes, 'ECG record');
             
             % Plot heart and respiratory rate
             plot(handles.heart_rate_axes, handles.Rts, handles.HRs);
