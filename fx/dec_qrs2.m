@@ -1,9 +1,9 @@
 function  [pico_rF , inicio_qrs , final_qrs] = dec_qrs2(escala,posiciones ,fs)
-clear pos maximo posmax maxi minimo posmin_izq ventana posmin_der;
 long = length(posiciones);
 w=1;
 kk=1;
 c=1;
+               
 while w <= long  
     pico_r=posiciones(w);
     der = 0.1*fs;

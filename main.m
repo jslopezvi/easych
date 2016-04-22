@@ -466,6 +466,7 @@ function plot_type_axes_Callback(hObject, eventdata, handles)
 
 switch get(handles.plot_type_axes,'Value')
     case 1 % HRV Record
+        reset(handles.monitoring_axes);
         cla(handles.monitoring_axes);
         cla(handles.heart_rate_axes);
         cla(handles.respiratory_rate_axes);
@@ -494,6 +495,7 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'on');
 
     case 2 % Online
+        reset(handles.monitoring_axes);
         cla(handles.monitoring_axes);
         cla(handles.heart_rate_axes);
         cla(handles.respiratory_rate_axes);
@@ -524,6 +526,7 @@ switch get(handles.plot_type_axes,'Value')
         
         set(findall(handles.load_pushbutton, '-property', 'enable'), 'enable', 'off');
     case 3 % Recordings
+        reset(handles.monitoring_axes);
         cla(handles.monitoring_axes);
         cla(handles.heart_rate_axes);
         cla(handles.respiratory_rate_axes);
@@ -552,6 +555,7 @@ switch get(handles.plot_type_axes,'Value')
         set(findall(handles.alarms_obs_txt, '-property', 'enable'), 'enable', 'on');
         
     otherwise % ECG Record
+        reset(handles.monitoring_axes);
         cla(handles.monitoring_axes);
         cla(handles.heart_rate_axes);
         cla(handles.respiratory_rate_axes);
@@ -1452,25 +1456,23 @@ function compute_hrv_pushbutton_Callback(hObject, eventdata, handles)
 % Compute HRV params
 h = waitbar(0,'Computing HRV parameters. Please wait...');
 
-switch get(handles.plot_type_axes,'Value')
-        case 3 % Recordings
-        case 4 % Recordings
-            t = handles.ibi(:,1); %time (s)
-            y = handles.ibi(:,2); %ibi (s)
-            
-            cla(handles.monitoring_axes);
-            legend(handles.monitoring_axes, 'hide');
-            
-            grid(handles.monitoring_axes, 'off');
-            grid(handles.monitoring_axes, 'on');
-            grid(handles.monitoring_axes, 'minor');
-            hold(handles.monitoring_axes, 'on');
-        
-            plot(handles.monitoring_axes, t, y);
-            legend(handles.monitoring_axes, 'RR intervals diffs');
-            set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
-    otherwise
-        % Nothing to do.                                
+% Recordings and ECG Recording
+if(get(handles.plot_type_axes,'Value') == 3 || get(handles.plot_type_axes,'Value') == 4),
+    t = handles.ibi(:,1); %time (s)
+    y = handles.ibi(:,2); %ibi (s)
+
+    reset(handles.monitoring_axes);
+    cla(handles.monitoring_axes);
+    legend(handles.monitoring_axes, 'hide');
+
+    grid(handles.monitoring_axes, 'off');
+    grid(handles.monitoring_axes, 'on');
+    grid(handles.monitoring_axes, 'minor');
+    hold(handles.monitoring_axes, 'on');
+
+    plot(handles.monitoring_axes, t, y);
+    legend(handles.monitoring_axes, 'RR intervals diffs');
+    set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');
 end
 
 handles.hrv_params = compute_hrv(handles.ibi);
@@ -1504,12 +1506,7 @@ handles = guidata(hObject);
 
 if(handles.current_row_recordings_table ~= 0),
 %     msgbox(sprintf('Showing recording # %d', handles.current_row_recordings_table), 'Info', 'help');    
-    h = waitbar(0,'Processing recording. Please wait...');
-    
-    grid(handles.monitoring_axes, 'off');
-    grid(handles.monitoring_axes, 'on');
-    grid(handles.monitoring_axes, 'minor');
-    hold(handles.monitoring_axes, 'on');
+    h = waitbar(0,'Processing recording. Please wait...');        
 
     recordings = handles.recordings_table.Data;
     recording_data = recordings(handles.current_row_recordings_table,:);
@@ -1529,10 +1526,16 @@ if(handles.current_row_recordings_table ~= 0),
     handles.number_of_samples_per_time_window = floor(handles.time_window_for_analysis/handles.time_per_sample);   
     
     if(numel(handles.current_load_data)/handles.number_of_samples_per_time_window > 1),        
+        reset(handles.monitoring_axes);
         cla(handles.monitoring_axes);
         cla(handles.heart_rate_axes);
         cla(handles.respiratory_rate_axes);
         legend(handles.monitoring_axes, 'hide');
+        
+        grid(handles.monitoring_axes, 'off');
+        grid(handles.monitoring_axes, 'on');
+        grid(handles.monitoring_axes, 'minor');
+        hold(handles.monitoring_axes, 'on');
         
         % Initial filtering threshold for training
         desv_stand = 6.3593e+03;   % Initial standard deviation
@@ -1638,6 +1641,7 @@ if(handles.current_row_recordings_table ~= 0),
         set(findall(handles.check_alarms_pushbutton, '-property', 'enable'), 'enable', 'on');
         set(findall(handles.plot_options_group, '-property', 'enable'), 'enable', 'on');        
     else
+        reset(handles.monitoring_axes);
         cla(handles.monitoring_axes);
         cla(handles.heart_rate_axes);
         cla(handles.respiratory_rate_axes);
@@ -1730,6 +1734,7 @@ if(FileName ~= 0),
             t = handles.ibi(:,1); %time (s)
             y = handles.ibi(:,2); %ibi (s)
             
+            reset(handles.monitoring_axes);
             cla(handles.monitoring_axes);
             cla(handles.heart_rate_axes);
             cla(handles.respiratory_rate_axes);
@@ -1855,6 +1860,7 @@ if(FileName ~= 0),
                 handles.ibi(j+1,1) = handles.ibi(j,2) + handles.ibi(j,1);
             end           
             
+            reset(handles.monitoring_axes);
             cla(handles.monitoring_axes);
             cla(handles.heart_rate_axes);
             cla(handles.respiratory_rate_axes);
@@ -2062,6 +2068,7 @@ function show_fiducial_pushbutton_Callback(hObject, eventdata, handles)
 
 h = waitbar(0,'Computing fiducial points. Please wait...');
 
+reset(handles.monitoring_axes);
 cla(handles.monitoring_axes);
 legend(handles.monitoring_axes, 'hide');
 
