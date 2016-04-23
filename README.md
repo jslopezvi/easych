@@ -4,7 +4,7 @@ Easy Cardio Health and Cardio HRV (Heart Rate Variability) analysis tool impleme
 Main Features:
 <ol>
 <li>HRV Records: Can visualize RR interval diff (IBI) records.</li>
-<li>Online:. Can visualize and record ECG signal adcquired from serial port. Multiple records can be saved in a EasyCH project file (.ech).</li>
+<li>Online:. Can visualize and record ECG signal acquired from serial port. Multiple records can be saved in a EasyCH project file (.ech).</li>
 <li>Recordings: Can visualized saved recordings from Online monitoring. Also can process them finding fiducial points and performing HRV analysis and plotting of RR interval diffs.</li>
 <li>ECG Records: Can visualize ECG recordings.</li>
 </ol>
